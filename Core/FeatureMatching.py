@@ -5,23 +5,6 @@ from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPixmap, QImage
 
 
-def harris_corner_detector(image, k=0.04, threshold=0.01):
-    """    
-    Parameters:
-        image: Grayscale input image of shape
-        k: Harris detector free parameter
-        threshold: Threshold to select strong corners
-    
-    Returns:
-        numpy Array of detected keypoints of shape (N, 2) where N is the number of detected corners
-    """
-     
-    gray = np.float32(image)
-    harris_response = cv2.cornerHarris(gray, blockSize=2, ksize=3, k=k)
-    harris_response = cv2.dilate(harris_response, None)
-    keypoints = np.argwhere(harris_response > threshold * harris_response.max())
-    return keypoints[:, [1, 0]]
-
 def sift_detector(image):
     """    
     Parameters:
@@ -38,12 +21,20 @@ def sift_detector(image):
     return kp_array, descriptors
 
 def match_features(des1, des2, top_n=100, ratio_threshold=0.6):
+    """    
+    Parameters:
+        des1 (numpy.ndarray): Feature descriptors from the first image of shape (N1, 128)
+        des2 (numpy.ndarray): Feature descriptors from the second image of shape (N2, 128)
+
+    Returns:
+        list: List of matched keypoint index pairs [(idx1, idx2)].
+    """
+    
     matches = []
     scores = []
 
     for i, d1 in enumerate(des1):
         best_match = None
-        second_best_match = None
         best_score = float("inf")
         second_best_score = float("inf")
 
@@ -51,7 +42,6 @@ def match_features(des1, des2, top_n=100, ratio_threshold=0.6):
             score = np.sum((d1 - d2) ** 2)  # SSD
             if score < best_score:
                 second_best_score = best_score
-                second_best_match = best_match
                 best_score = score
                 best_match = j
             elif score < second_best_score:
