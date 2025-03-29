@@ -6,35 +6,41 @@ from Core.imageMode import rgb_to_grayscale
 from Core.kernelConvolution import sobel, gaussian_filter
 
 
-def extractHarrisFeatures(img, k=0.04, threshold=0.005):
+def extractHarrisFeatures(img, k=0.08, threshold=0.005):
     image = img.copy()
 
     # edges = cv2.Canny(rgb_to_grayscale(image),150,200)
 
     # edges = gaussian_filter(image, 5, 1)
 
-    gradienX, gradienY, _, _ = sobel(rgb_to_grayscale(image), 3)
+    gradienX, gradienY, _, _ = sobel(rgb_to_grayscale(image), 5)
 
 
     Ixx = gradienX ** 2
     Iyy = gradienY ** 2
     Ixy = gradienX * gradienY
 
-    Ixx = gaussian_filter(Ixx, 5, 1.5)
-    Iyy = gaussian_filter(Iyy, 5, 1.5)
-    Ixy = gaussian_filter(Ixy, 5, 2.5)
+    Ixx = gaussian_filter(Ixx, 5, 2)
+    Iyy = gaussian_filter(Iyy, 5, 4)
+    Ixy = gaussian_filter(Ixy, 5, 4)
+
+    cv2.imshow("Ixx", Ixx)
+    cv2.imshow("Iyy", Iyy)
+    cv2.imshow("Ixy", Ixy)
 
     # Efficiently stack Ixx, Ixy, Iyy into the correct (H, W, 2, 2) format
     harrisMat = np.stack((np.stack((Ixx, Ixy), axis=-1),
                           np.stack((Ixy, Iyy), axis=-1)), axis=-2)
 
+    # Compute determinant of the Harris matrix
+    det_M = (Ixx * Iyy) - (Ixy ** 2)  # Faster than np.linalg.det()
 
-    # Compute determinant and trace in one go
-    det_M = np.linalg.det(harrisMat)  # Shape (H, W)
-    trace_M = np.trace(harrisMat, axis1=-2, axis2=-1)  # Shape (H, W)
+    # Compute trace of the Harris matrix
+    trace_M = Ixx + Iyy  # Faster than np.trace()
 
     # Compute Harris response R
-    R = det_M - k * (trace_M ** 2)  # Shape (H, W)
+    R = det_M - k * (trace_M ** 2)
+
 
     # Normalize R
     R_min, R_max = np.min(R), np.max(R)
@@ -46,7 +52,7 @@ def extractHarrisFeatures(img, k=0.04, threshold=0.005):
     R_norm = R_norm.astype(np.uint8)
 
     # Compute threshold value
-    threshold_value = np.percentile(R_norm[R_norm > 0], 79) if np.any(R_norm > 0) else 0
+    threshold_value = np.percentile(R_norm[R_norm > 0], 99.8) if np.any(R_norm > 0) else 0
     # threshold_value = np.mean(R[R > 0]) + 2 * np.std(R[R > 0])
 
     # Apply thresholding first
@@ -54,7 +60,9 @@ def extractHarrisFeatures(img, k=0.04, threshold=0.005):
 
     # Apply non-max suppression AFTER thresholding
     # corners = non_max_suppression(corners, 5)
-    corners = distance_based_nms_fast(corners, R_norm, 5)
+
+    corners = distance_based_nms_fast(corners, R_norm, 30)
+
 
     corner_coords = np.where(corners > 0)
     corner_coords = list(zip(corner_coords[1], corner_coords[0]))  # (x, y) format
@@ -104,7 +112,7 @@ def non_max_suppression(subject, window_size=3):
 
     return suppressed
 
-def distance_based_nms_fast(corners, response_map, dist_thresh=10):
+def distance_based_nms_fast(corners, response_map, dist_thresh=1000):
         y, x = np.where(corners > 0)
         if len(x) == 0:
             return np.zeros_like(corners)
@@ -139,7 +147,7 @@ def distance_based_nms_fast(corners, response_map, dist_thresh=10):
 
 if __name__ == "__main__":
     # Read and process the image
-    img = cv2.imread("../images/Objects.jpg")
+    img = cv2.imread("../images/Chess.png")
     if img is None:
         raise FileNotFoundError("Could not load image at path")
 
