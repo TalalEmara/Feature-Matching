@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from Core.imageMode import rgb_to_grayscale
@@ -56,7 +58,7 @@ def generate_sobel_kernels(kernel_size):
                        [0, 0, 0],
                        [-1, -2, -1]])
     else:
-        pascal_row = np.array([np.math.comb(kernel_size - 1, i) for i in range(kernel_size)])
+        pascal_row = np.array([math.comb(kernel_size - 1, i) for i in range(kernel_size)])
         deriv_kernel = np.array([-i for i in range(-(kernel_size // 2), kernel_size // 2 + 1)])
         Gx = np.outer(deriv_kernel, pascal_row)
         Gy = np.outer(pascal_row, deriv_kernel)
