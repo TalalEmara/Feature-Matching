@@ -20,9 +20,9 @@ def extractHarrisFeatures(img, k=0.04, threshold=0.005):
     Iyy = gradienY ** 2
     Ixy = gradienX * gradienY
 
-    Ixx = gaussian_filter(Ixx, 5, .5)
-    Iyy = gaussian_filter(Iyy, 5, .5)
-    Ixy = gaussian_filter(Ixy, 5, .5)
+    Ixx = gaussian_filter(Ixx, 5, 1.5)
+    Iyy = gaussian_filter(Iyy, 5, 1.5)
+    Ixy = gaussian_filter(Ixy, 5, 2.5)
 
     # Efficiently stack Ixx, Ixy, Iyy into the correct (H, W, 2, 2) format
     harrisMat = np.stack((np.stack((Ixx, Ixy), axis=-1),
@@ -46,7 +46,7 @@ def extractHarrisFeatures(img, k=0.04, threshold=0.005):
     R_norm = R_norm.astype(np.uint8)
 
     # Compute threshold value
-    threshold_value = np.percentile(R_norm[R_norm > 0], 98) if np.any(R_norm > 0) else 0
+    threshold_value = np.percentile(R_norm[R_norm > 0], 79) if np.any(R_norm > 0) else 0
     # threshold_value = np.mean(R[R > 0]) + 2 * np.std(R[R > 0])
 
     # Apply thresholding first
@@ -54,13 +54,37 @@ def extractHarrisFeatures(img, k=0.04, threshold=0.005):
 
     # Apply non-max suppression AFTER thresholding
     # corners = non_max_suppression(corners, 5)
-    corners = distance_based_nms_fast(corners, R_norm, 10)
+    corners = distance_based_nms_fast(corners, R_norm, 5)
+
+    corner_coords = np.where(corners > 0)
+    corner_coords = list(zip(corner_coords[1], corner_coords[0]))  # (x, y) format
+
+    # Create image with corners marked
+    marked_image = image.copy()
+    for (x, y) in corner_coords:
+        cv2.circle(marked_image, (x, y), 3, (0, 0, 255), -1)  # Red circles
+
 
     # Create a blue visualization map (R_norm mapped to blue channel)
     blue_map = np.zeros((R.shape[0], R.shape[1], 3), dtype=np.uint8)
     blue_map[:, :, 0] = R_norm  # Map response to the blue channel correctly
 
-    return corners, blue_map, image
+    blue_map_thresholded = np.zeros_like(blue_map)  # Initialize empty blue map
+    blue_map_thresholded = R_norm * (corners > 0)
+
+    BRmin, BRmax = np.min(blue_map_thresholded), np.max(blue_map_thresholded)
+    if BRmax != BRmin:
+        blue_map_thresholded = ((blue_map_thresholded - BRmin) / (BRmax - BRmin)) * 255
+    else:
+        blue_map_thresholded = np.zeros_like(R)
+
+    blue_map_thresholded = blue_map_thresholded.astype(np.uint8)
+
+
+    blue_map_thresholded_final = np.zeros_like(blue_map)
+    blue_map_thresholded_final[:, :, 0] = blue_map_thresholded
+
+    return corners, blue_map,blue_map_thresholded_final, marked_image
 
 
 def non_max_suppression(subject, window_size=3):
@@ -113,56 +137,41 @@ def distance_based_nms_fast(corners, response_map, dist_thresh=10):
 
         return filtered
 
-
 if __name__ == "__main__":
     # Read and process the image
-    img = cv2.imread("../images/Chess.png")
+    img = cv2.imread("../images/Objects.jpg")
     if img is None:
-        raise FileNotFoundError("Could not load image at path: ../images/Chess.png")
+        raise FileNotFoundError("Could not load image at path")
 
-    corners, blue_map, image = extractHarrisFeatures(img)
+    # Extract features
+    corners, blue_map, thresholdBlue, image = extractHarrisFeatures(img)
 
     # Ensure all images are 3-channel (convert grayscale if needed)
-    if len(image.shape) == 2:
-        image_color = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-    else:
-        image_color = image.copy()
+    def to_color(img):
+        return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR) if len(img.shape) == 2 else img.copy()
 
-    if len(corners.shape) == 2:
-        corners_color = cv2.cvtColor(corners, cv2.COLOR_GRAY2BGR)
-    else:
-        corners_color = corners.copy()
+    image_color = to_color(image)
+    corners_color = to_color(corners)
 
-    # Blue_map should already be 3-channel from the extractHarrisFeatures function
-
-    # Find the maximum dimensions
+    # Resize all images to the same dimensions
     max_height = max(image_color.shape[0], corners_color.shape[0], blue_map.shape[0])
     max_width = max(image_color.shape[1], corners_color.shape[1], blue_map.shape[1])
 
-
-    # Resize all images to the same dimensions
     def resize_to_match(img, height, width):
         return cv2.resize(img, (width, height))
-
 
     image_resized = resize_to_match(image_color, max_height, max_width)
     corners_resized = resize_to_match(corners_color, max_height, max_width)
     blue_map_resized = resize_to_match(blue_map, max_height, max_width)
+    thresholdBlue_resized = resize_to_match(thresholdBlue, max_height, max_width)
 
-    # Arrange in 2x2 format
-    top_row = cv2.vconcat([image_resized])
-    bottom_row = cv2.vconcat([corners_resized, blue_map_resized])
-
-    # Ensure both rows have the same width
-    if top_row.shape[1] != bottom_row.shape[1]:
-        min_width = min(top_row.shape[1], bottom_row.shape[1])
-        top_row = cv2.resize(top_row, (min_width, top_row.shape[0]))
-        bottom_row = cv2.resize(bottom_row, (min_width, bottom_row.shape[0]))
-
-    # stacked_image = cv2.Hconcat([top_row, bottom_row])
-    stacked_image = cv2.hconcat([image_resized, corners_resized, blue_map_resized])
+    # Arrange images in a row
+    topRow = np.hstack([image_resized, corners_resized])
+    bottomRow = np.hstack([blue_map_resized, thresholdBlue_resized])
+    # stacked_image = cv2.vconcat([image_resized, corners_resized, blue_map_resized, thresholdBlue_resized])
+    stacked_image = cv2.vconcat([topRow,bottomRow])
 
     # Display the result
-    cv2.imshow("Harris Features - Original | Corners | Response Map", stacked_image)
+    cv2.imshow("Harris Features - Original | Corners | Response Map | Thresholded Response", stacked_image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
