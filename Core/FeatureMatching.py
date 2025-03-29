@@ -20,8 +20,6 @@ def sift_detector(image):
     sift = cv2.SIFT_create()
     keypoints, descriptors = sift.detectAndCompute(image, None)
     kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
-    # print(f"Number of keypoints detected: {len(keypoints)}")
-    # print(f"Descriptors shape: {descriptors.shape}")
     return kp_array, descriptors
 
 import numpy as np
@@ -127,8 +125,8 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
 
 
 if __name__ == "__main__":
-    img1 = cv2.imread("CV/Feature-Matching/images/Notre Dam 1.png")
-    img2 = cv2.imread("CV/Feature-Matching/images/Notre Dam 2.png")
+    img1 = cv2.imread("../images/Notre Dam 1.png")
+    img2 = cv2.imread("../images/Notre Dam 2.png")
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     
