@@ -1,6 +1,8 @@
-import sys
 import cv2
 import numpy as np
+import time
+
+import sys
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPixmap, QImage
 
@@ -136,18 +138,33 @@ if __name__ == "__main__":
     print(f"Number of keypoints in image 1: {len(kp1)}")
     print(f"Number of keypoints in image 2: {len(kp2)}")
 
-    print("Performing feature matching")
-    matches = match_features(des1, des2,method="ssd")
-    print(f"Number of matches found: {len(matches)}")
+    print("Performing feature matching using SSD")
+    start_time = time.time()
+    matches_ssd = match_features(des1, des2, method="ssd")
+    ssd_time = time.time() - start_time
+    print(f"SSD Matching Time: {ssd_time:.6f} seconds")
+    print(f"Number of matches found (SSD): {len(matches_ssd)}")
 
-    print("Drawing matched features")
-    matched_img = draw_matches(img1, kp1, img2, kp2, matches)
+    print("Performing feature matching using NCC")
+    start_time = time.time()
+    matches_ncc = match_features(des1, des2, method="ncc")
+    ncc_time = time.time() - start_time
+    print(f"NCC Matching Time: {ncc_time:.6f} seconds")
+    print(f"Number of matches found (NCC): {len(matches_ncc)}")
+
+
+    print("Drawing matched features using SSD")
+    matched_img1 = draw_matches(img1, kp1, img2, kp2, matches_ssd)
+
+    print("Drawing matched features using NCC")
+    matched_img2 = draw_matches(img1, kp1, img2, kp2, matches_ncc)
     
     #directly using pyqt
     #draw_matches(img1, kp1, img2, kp2, matches)
 
     print("Feature matching visualization completed")
     print("Displaying the matched image")
-    cv2.imshow("Feature Matches", matched_img)
+    cv2.imshow("Feature Matches - SSD", matched_img1)
+    cv2.imshow("Feature Matches - NCC", matched_img2)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
