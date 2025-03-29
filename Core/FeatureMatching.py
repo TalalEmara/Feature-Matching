@@ -29,8 +29,6 @@ def match_features(des1, des2, method="ssd", top_n=100, ratio_threshold=0.6):
     Parameters:
         des1 : numpy array Feature descriptors from the first image of shape (N1, 128)
         des2 : numpy array Feature descriptors from the second image of shape (N2, 128)
-        method : str, Matching method, either 'ssd' or 'ncc'
-        top_n : Maximum number of matches to return
 
     Returns:
         list: List of matched keypoint index pairs [(idx1, idx2)].
