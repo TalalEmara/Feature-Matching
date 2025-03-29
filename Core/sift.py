@@ -106,9 +106,86 @@ def refine_keypoints(dog_pyramid, keypoints, contrast_threshold=0.03):
 
 
 # Step 3: Orientation assignment
-def assign_orientation():
-    pass
+def assign_orientation(gaussian_pyramid, keypoints, num_bins=36):
+    keypoints_with_orientation = []
+    
+    for (octave, scale, x, y) in keypoints:
+        img = gaussian_pyramid[octave][scale] 
+
+        dx = cv.Sobel(img, cv.CV_64F, 1, 0, ksize=3)
+        dy = cv.Sobel(img, cv.CV_64F, 0, 1, ksize=3)
+        
+        magnitude = np.sqrt(dx**2 + dy**2)
+        orientation = np.arctan2(dy, dx) * (180 / np.pi) 
+
+        radius = 8 
+        if x - radius < 0 or y - radius < 0 or x + radius >= img.shape[0] or y + radius >= img.shape[1]:
+            continue
+        
+        local_magnitude = magnitude[x - radius:x + radius + 1, y - radius:y + radius + 1]
+        local_orientation = orientation[x - radius:x + radius + 1, y - radius:y + radius + 1]
+
+        hist = np.zeros(num_bins)
+        bin_width = 360 // num_bins
+        
+        for i in range(local_magnitude.shape[0]):
+            for j in range(local_magnitude.shape[1]):
+                theta = local_orientation[i, j] % 360 
+                bin_idx = int(theta // bin_width)
+                hist[bin_idx] += local_magnitude[i, j] 
+
+        max_bin = np.argmax(hist)
+        max_orientation = max_bin * bin_width
+        
+        keypoints_with_orientation.append((octave, scale, x, y, max_orientation))
+        threshold = 0.8 * hist[max_bin]
+        for bin_idx, value in enumerate(hist):
+            if bin_idx != max_bin and value > threshold:
+                secondary_orientation = bin_idx * bin_width
+                keypoints_with_orientation.append((octave, scale, x, y, secondary_orientation))
+    
+    return keypoints_with_orientation
+
 
 # Step 4: Keypoint descriptor
-def keypoint_descriptor():
-    pass
+def keypoint_descriptor(gaussian_pyramid, keypoints, num_bins=8, window_size=16):
+    descriptors = []
+    for (octave, scale, x, y, orientation) in keypoints:
+        img = gaussian_pyramid[octave][scale]
+        dx = cv.Sobel(img, cv.CV_64F, 1, 0, ksize=3)
+        dy = cv.Sobel(img, cv.CV_64F, 0, 1, ksize=3)
+
+        magnitude = np.sqrt(dx**2 + dy**2)
+        theta = (np.arctan2(dy, dx) * (180 / np.pi) - orientation) % 360 
+        radius = window_size // 2
+        if x - radius < 0 or y - radius < 0 or x + radius >= img.shape[0] or y + radius >= img.shape[1]:
+            continue 
+        descriptor = []
+        sub_region_size = window_size // 4 
+        bin_width = 360 // num_bins  
+
+        for i in range(4):
+            for j in range(4):
+                x_start, x_end = x + i * sub_region_size - radius, x + (i + 1) * sub_region_size - radius
+                y_start, y_end = y + j * sub_region_size - radius, y + (j + 1) * sub_region_size - radius
+
+                local_magnitude = magnitude[x_start:x_end, y_start:y_end]
+                local_orientation = theta[x_start:x_end, y_start:y_end]
+
+                hist = np.zeros(num_bins)
+                for m in range(local_magnitude.shape[0]):
+                    for n in range(local_magnitude.shape[1]):
+                        bin_idx = int(local_orientation[m, n] // bin_width)
+                        hist[bin_idx] += local_magnitude[m, n]
+
+                descriptor.extend(hist)
+
+        descriptor = np.array(descriptor)
+        descriptor /= np.linalg.norm(descriptor)
+        
+        descriptor = np.clip(descriptor, 0, 0.2)
+        descriptor /= np.linalg.norm(descriptor)
+
+        descriptors.append(descriptor)
+
+    return descriptors
