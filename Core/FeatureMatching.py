@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import time
+from scipy.spatial.distance import cdist
 
 import sys
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
@@ -22,7 +23,6 @@ def sift_detector(image):
     kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
     return kp_array, descriptors
 
-import numpy as np
 
 def match_features(des1, des2, method="ssd", top_n=100, ratio_threshold=0.6):
     """
@@ -35,35 +35,51 @@ def match_features(des1, des2, method="ssd", top_n=100, ratio_threshold=0.6):
     """
     matches = []
     scores = []
+    ncc_threshold = 1.25 - 0.25 * ratio_threshold
     
     if method == "ssd":
-        for i, d1 in enumerate(des1):
-            dists = np.sum((des2 - d1) ** 2, axis=1) # Squared Euclidean distance
-            best_idx = np.argmin(dists)
-            second_best_idx = np.partition(dists, 1)[1]
-            
-            if dists[best_idx] / second_best_idx < ratio_threshold:
-                matches.append((i, best_idx))
-                scores.append(dists[best_idx])
+        dists = cdist(des1, des2, 'sqeuclidean')
+                
+        best_indices = np.argmin(dists, axis=1)
+        sorted_indices = np.argsort(dists, axis=1)
+        second_best_indices = sorted_indices[:, 1]
+        
+        valid_matches = (dists[np.arange(len(des1)), best_indices] /
+                         dists[np.arange(len(des1)), second_best_indices]) < ratio_threshold
+        
+        for i, valid in enumerate(valid_matches):
+            if valid:
+                matches.append((i, best_indices[i]))
+                scores.append(dists[i, best_indices[i]])
     
-    elif method == "ncc": # Normalized Cross-Correlation
+    elif method == "ncc":  # Normalized Cross-Correlation
         des1_norm = des1 / (np.linalg.norm(des1, axis=1, keepdims=True) + 1e-10)
         des2_norm = des2 / (np.linalg.norm(des2, axis=1, keepdims=True) + 1e-10)
         
-        for i, d1 in enumerate(des1_norm):
-            scores_all = np.dot(des2_norm, d1)
-            best_idx = np.argmax(scores_all)
-            second_best_idx = np.partition(scores_all, -2)[-2]
-            
-            if scores_all[best_idx] > ratio_threshold and (second_best_idx < 0 or scores_all[best_idx] / second_best_idx > 1.1):
-                matches.append((i, best_idx))
-                scores.append(scores_all[best_idx])
+        scores_matrix = np.zeros((len(des1), len(des2)))
+        
+        for i in range(len(des1)):
+            for j in range(len(des2)):
+                scores_matrix[i, j] = np.dot(des1_norm[i], des2_norm[j])
+        
+        best_indices = np.argmax(scores_matrix, axis=1)
+        sorted_scores = np.sort(scores_matrix, axis=1)
+        second_best_scores = sorted_scores[:, -2]
+        best_scores = scores_matrix[np.arange(len(des1)), best_indices]
+        
+        valid_matches = (best_scores > ratio_threshold) & ((second_best_scores < 0) | (best_scores / second_best_scores > ncc_threshold))
+        
+        for i, valid in enumerate(valid_matches):
+            if valid:
+                matches.append((i, best_indices[i]))
+                scores.append(best_scores[i])
     
     if len(matches) > top_n:
         sorted_indices = np.argsort(scores)[:top_n] if method == "ssd" else np.argsort(scores)[::-1][:top_n]
         matches = [matches[i] for i in sorted_indices]
     
     return matches
+
 
 
 def draw_matches(img1, keypoints1, img2, keypoints2, matches):
@@ -125,8 +141,8 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
 
 
 if __name__ == "__main__":
-    img1 = cv2.imread("../images/Notre Dam 1.png")
-    img2 = cv2.imread("../images/Notre Dam 2.png")
+    img1 = cv2.imread("images/Feature matching/Notre Dam 1.png")
+    img2 = cv2.imread("images/Feature matching/Notre Dam 1.png")
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     
