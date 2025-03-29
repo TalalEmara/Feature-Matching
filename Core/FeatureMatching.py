@@ -1,6 +1,8 @@
-import sys
 import cv2
 import numpy as np
+import time
+
+import sys
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPixmap, QImage
 
@@ -20,42 +22,47 @@ def sift_detector(image):
     kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
     return kp_array, descriptors
 
-def match_features(des1, des2, top_n=100, ratio_threshold=0.6):
-    """    
+import numpy as np
+
+def match_features(des1, des2, method="ssd", top_n=100, ratio_threshold=0.6):
+    """
     Parameters:
-        des1 (numpy.ndarray): Feature descriptors from the first image of shape (N1, 128)
-        des2 (numpy.ndarray): Feature descriptors from the second image of shape (N2, 128)
+        des1 : numpy array Feature descriptors from the first image of shape (N1, 128)
+        des2 : numpy array Feature descriptors from the second image of shape (N2, 128)
 
     Returns:
         list: List of matched keypoint index pairs [(idx1, idx2)].
     """
-    
     matches = []
     scores = []
-
-    for i, d1 in enumerate(des1):
-        best_match = None
-        best_score = float("inf")
-        second_best_score = float("inf")
-
-        for j, d2 in enumerate(des2):
-            score = np.sum((d1 - d2) ** 2)  # SSD
-            if score < best_score:
-                second_best_score = best_score
-                best_score = score
-                best_match = j
-            elif score < second_best_score:
-                second_best_score = score
-
-        if best_match is not None and second_best_score != float("inf"):
-            if best_score / second_best_score < ratio_threshold:
-                matches.append((i, best_match))
-                scores.append(best_score)
-
+    
+    if method == "ssd":
+        for i, d1 in enumerate(des1):
+            dists = np.sum((des2 - d1) ** 2, axis=1) # Squared Euclidean distance
+            best_idx = np.argmin(dists)
+            second_best_idx = np.partition(dists, 1)[1]
+            
+            if dists[best_idx] / second_best_idx < ratio_threshold:
+                matches.append((i, best_idx))
+                scores.append(dists[best_idx])
+    
+    elif method == "ncc": # Normalized Cross-Correlation
+        des1_norm = des1 / (np.linalg.norm(des1, axis=1, keepdims=True) + 1e-10)
+        des2_norm = des2 / (np.linalg.norm(des2, axis=1, keepdims=True) + 1e-10)
+        
+        for i, d1 in enumerate(des1_norm):
+            scores_all = np.dot(des2_norm, d1)
+            best_idx = np.argmax(scores_all)
+            second_best_idx = np.partition(scores_all, -2)[-2]
+            
+            if scores_all[best_idx] > ratio_threshold and (second_best_idx < 0 or scores_all[best_idx] / second_best_idx > 1.1):
+                matches.append((i, best_idx))
+                scores.append(scores_all[best_idx])
+    
     if len(matches) > top_n:
-        sorted_indices = np.argsort(scores)[:top_n]
+        sorted_indices = np.argsort(scores)[:top_n] if method == "ssd" else np.argsort(scores)[::-1][:top_n]
         matches = [matches[i] for i in sorted_indices]
-
+    
     return matches
 
 
@@ -129,18 +136,33 @@ if __name__ == "__main__":
     print(f"Number of keypoints in image 1: {len(kp1)}")
     print(f"Number of keypoints in image 2: {len(kp2)}")
 
-    print("Performing feature matching")
-    matches = match_features(des1, des2)
-    print(f"Number of matches found: {len(matches)}")
+    print("Performing feature matching using SSD")
+    start_time = time.time()
+    matches_ssd = match_features(des1, des2, method="ssd")
+    ssd_time = time.time() - start_time
+    print(f"SSD Matching Time: {ssd_time:.6f} seconds")
+    print(f"Number of matches found (SSD): {len(matches_ssd)}")
 
-    print("Drawing matched features")
-    matched_img = draw_matches(img1, kp1, img2, kp2, matches)
+    print("Performing feature matching using NCC")
+    start_time = time.time()
+    matches_ncc = match_features(des1, des2, method="ncc")
+    ncc_time = time.time() - start_time
+    print(f"NCC Matching Time: {ncc_time:.6f} seconds")
+    print(f"Number of matches found (NCC): {len(matches_ncc)}")
+
+
+    print("Drawing matched features using SSD")
+    matched_img1 = draw_matches(img1, kp1, img2, kp2, matches_ssd)
+
+    print("Drawing matched features using NCC")
+    matched_img2 = draw_matches(img1, kp1, img2, kp2, matches_ncc)
     
     #directly using pyqt
     #draw_matches(img1, kp1, img2, kp2, matches)
 
     print("Feature matching visualization completed")
     print("Displaying the matched image")
-    cv2.imshow("Feature Matches", matched_img)
+    cv2.imshow("Feature Matches - SSD", matched_img1)
+    cv2.imshow("Feature Matches - NCC", matched_img2)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
