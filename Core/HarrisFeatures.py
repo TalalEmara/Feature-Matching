@@ -6,40 +6,69 @@ from Core.imageMode import rgb_to_grayscale
 from Core.kernelConvolution import sobel, gaussian_filter
 
 
-def extractHarrisFeatures(img, k=0.02, threshold=0.005):
+def extractHarrisFeatures(img, k=0.04, window_size=7, threshold=0.005):
     image = img.copy()
+    gray = rgb_to_grayscale(image).astype(np.float32)
 
     # edges = cv2.Canny(rgb_to_grayscale(image),150,200)
 
     # edges = gaussian_filter(image, 5, 1)
 
-    gradienX, gradienY, _, _ = sobel(rgb_to_grayscale(image), 5)
+    gradienX, gradienY, _, _ = sobel(gray, 5)
 
 
     Ixx = gradienX ** 2
     Iyy = gradienY ** 2
     Ixy = gradienX * gradienY
 
-    Ixx = gaussian_filter(Ixx, 5, .8)
-    Iyy = gaussian_filter(Iyy, 3, .8)
-    Ixy = gaussian_filter(Ixy, 3, 1)
+    # Ixx = gaussian_filter(Ixx, 5, .8)
+    # Iyy = gaussian_filter(Iyy, 3, .8)
+    # Ixy = gaussian_filter(Ixy, 3, 1)
+    #
+    # cv2.imshow("Ixx", Ixx)
+    # cv2.imshow("Iyy", Iyy)
+    # cv2.imshow("Ixy", Ixy)
 
-    cv2.imshow("Ixx", Ixx)
-    cv2.imshow("Iyy", Iyy)
-    cv2.imshow("Ixy", Ixy)
+    # # Efficiently stack Ixx, Ixy, Iyy into the correct (H, W, 2, 2) format
+    # harrisMat = np.stack((np.stack((Ixx, Ixy), axis=-1),
+    #                       np.stack((Ixy, Iyy), axis=-1)), axis=-2)
+    #
+    # # Compute determinant of the Harris matrix
+    # det_M = (Ixx * Iyy) - (Ixy ** 2)  # Faster than np.linalg.det()
+    #
+    # # Compute trace of the Harris matrix
+    # trace_M = Ixx + Iyy  # Faster than np.trace()
+    #
+    # # Compute Harris response R
+    # R = det_M - k * (trace_M ** 2)
+    # Pad all matrices to handle window borders
+    # pad = window_size // 2
+    # Ixx_padded = np.pad(Ixx, pad, mode='constant')
+    # Iyy_padded = np.pad(Iyy, pad, mode='constant')
+    # Ixy_padded = np.pad(Ixy, pad, mode='constant')
 
-    # Efficiently stack Ixx, Ixy, Iyy into the correct (H, W, 2, 2) format
-    harrisMat = np.stack((np.stack((Ixx, Ixy), axis=-1),
-                          np.stack((Ixy, Iyy), axis=-1)), axis=-2)
+    height, width = gray.shape
+    R = np.zeros((height, width))
 
-    # Compute determinant of the Harris matrix
-    det_M = (Ixx * Iyy) - (Ixy ** 2)  # Faster than np.linalg.det()
+    # Sliding window to compute local Harris response
+    for i in range(height):
+        for j in range(width):
+            # Extract window for each component
+            window_Ixx = Ixx[i:i + window_size, j:j + window_size]
+            window_Iyy = Iyy[i:i + window_size, j:j + window_size]
+            window_Ixy = Ixy[i:i + window_size, j:j + window_size]
 
-    # Compute trace of the Harris matrix
-    trace_M = Ixx + Iyy  # Faster than np.trace()
+            # Sum of values in the window
+            Sxx = np.sum(window_Ixx)
+            Syy = np.sum(window_Iyy)
+            Sxy = np.sum(window_Ixy)
 
-    # Compute Harris response R
-    R = det_M - k * (trace_M ** 2)
+            # Harris matrix H
+            det_H = (Sxx * Syy) - (Sxy ** 2)
+            trace_H = Sxx + Syy
+
+            # Harris response R
+            R[i, j] = det_H - k * (trace_H ** 2)
 
 
     # Normalize R
@@ -49,19 +78,18 @@ def extractHarrisFeatures(img, k=0.02, threshold=0.005):
     else:
         R_norm = np.zeros_like(R)
 
-    R_norm = R_norm.astype(np.uint8)
 
     # Compute threshold value
-    threshold_value = np.percentile(R_norm[R_norm > 0], 99.8) if np.any(R_norm > 0) else 0
+    threshold_value = np.percentile(R_norm[R_norm > 0], 100) if np.any(R_norm > 0) else 0
     # threshold_value = np.mean(R[R > 0]) + 2 * np.std(R[R > 0])
 
     # Apply thresholding first
     corners = (R > threshold_value).astype(np.uint8) * 255
 
     # Apply non-max suppression AFTER thresholding
-    # corners = non_max_suppression(corners, 5)
 
-    corners = distance_based_nms_fast(corners, R, 30)
+    corners = distance_based_nms_fast(corners, R, 50)
+    corners = non_max_suppression(corners, 10)
 
 
     corner_coords = np.where(corners > 0)
@@ -70,7 +98,7 @@ def extractHarrisFeatures(img, k=0.02, threshold=0.005):
     # Create image with corners marked
     marked_image = image.copy()
     for (x, y) in corner_coords:
-        cv2.circle(marked_image, (x, y), 1, (0, 0, 255), -1)  # Red circles
+        cv2.circle(marked_image, (x, y), 2, (0, 0, 255), -1)  # Red circles
 
 
     # Create a blue visualization map (R_norm mapped to blue channel)
@@ -112,7 +140,7 @@ def non_max_suppression(subject, window_size=3):
 
     return suppressed
 
-def distance_based_nms_fast(corners, response_map, dist_thresh=1000):
+def distance_based_nms_fast(corners, response_map, dist_thresh=2000):
         y, x = np.where(corners > 0)
         if len(x) == 0:
             return np.zeros_like(corners)
@@ -145,72 +173,36 @@ def distance_based_nms_fast(corners, response_map, dist_thresh=1000):
 
         return filtered
 
-import cv2
-import numpy as np
 
-if __name__ == "__main__":
-    # Read the image
-    img = cv2.imread("../images/Notre Dam 1.png")
-    if img is None:
-        raise FileNotFoundError("Could not load image at path")
+def test_harris_features():
+    import os
+    import cv2
 
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Load test image (adjust path as needed)
+    img_path = '../images/Chess.png'  # Replace with your image path
+    if not os.path.exists(img_path):
+        print(f"Image not found at: {img_path}")
+        return
 
-    # Compute Harris response using OpenCV (ensure input is float32)
-    harris_response = cv2.cornerHarris(gray.astype(np.float32), 2, 3, 0.04)
+    img = cv2.imread(img_path)
+    img = cv2.resize(img, (640, 480))  # Resize for consistency
 
-    # Normalize Harris response for visualization
-    harris_normalized = cv2.normalize(harris_response, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    # Run the Harris feature extraction
+    corners, blue_map, blue_map_thresholded_final, marked_image = extractHarrisFeatures(
+        img, k=0.04, window_size=3, threshold=0.005
+    )
 
-    # Overlay Harris corners on the original image (Red color)
-    img_harris_corners = img.copy()
-    threshold = 0.02 * harris_response.max()  # Adjust threshold for visibility
-    img_harris_corners[harris_response > threshold] = [0, 0, 255]  # Mark corners in red
+    # Show outputs using OpenCV windows
+    cv2.imshow("Original Image", img)
+    cv2.imshow("Corners Marked (Red)", marked_image)
+    cv2.imshow("Harris Response Map (Blue)", blue_map)
+    cv2.imshow("Thresholded Corners (Blue)", blue_map_thresholded_final)
 
-    # Extract your Harris Features
-    corners, blue_map, thresholdBlue, image = extractHarrisFeatures(img)
-
-    # 🔹 Ensure all images are uint8 and 3-channel (to fix cv2.vconcat issue)
-    def prepare_image(img):
-        if img.dtype != np.uint8:
-            img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        if len(img.shape) == 2:  # Convert grayscale to 3-channel
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        return img
-
-    # Convert all images
-    image_color = prepare_image(image)
-    corners_color = prepare_image(corners)
-    blue_map_color = prepare_image(blue_map)
-    thresholdBlue_color = prepare_image(thresholdBlue)
-    harris_corners_color = prepare_image(img_harris_corners)
-
-    # Resize all images to match dimensions
-    max_height = max(image_color.shape[0], corners_color.shape[0], blue_map_color.shape[0], thresholdBlue_color.shape[0], harris_corners_color.shape[0])
-    max_width = max(image_color.shape[1], corners_color.shape[1], blue_map_color.shape[1], thresholdBlue_color.shape[1], harris_corners_color.shape[1])
-
-    def resize_to_match(img, height, width):
-        return cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
-
-    image_resized = resize_to_match(image_color, max_height, max_width)
-    corners_resized = resize_to_match(corners_color, max_height, max_width)
-    blue_map_resized = resize_to_match(blue_map_color, max_height, max_width)
-    thresholdBlue_resized = resize_to_match(thresholdBlue_color, max_height, max_width)
-    harris_corners_resized = resize_to_match(harris_corners_color, max_height, max_width)
-
-    # 🔹 Ensure all images have the same dtype and shape before concatenation
-    print("Dtype Check:", image_resized.dtype, corners_resized.dtype, blue_map_resized.dtype, thresholdBlue_resized.dtype, harris_corners_resized.dtype)
-    print("Shape Check:", image_resized.shape, corners_resized.shape, blue_map_resized.shape, thresholdBlue_resized.shape, harris_corners_resized.shape)
-
-    # Arrange images in a grid
-    topRow = cv2.hconcat([image_resized, corners_resized, harris_corners_resized])
-    bottomRow = cv2.hconcat([blue_map_resized, thresholdBlue_resized])
-
-    # Stack all images together
-
-    # Display the result
-    cv2.imshow("Harris Feaginal | Your Corners | CV2 Harris | Response Map | Thresholded Response", topRow)
-    # cv2.imshow("Harris Features - Original | Your Corners | CV2 Harris | Response Map | Thresholded Response", bottomRow)
+    print(f"Detected {np.sum(corners > 0)} corners.")
+    print("Press any key to close the windows...")
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+# Entry point for the script
+if __name__ == "__main__":
+    test_harris_features()
