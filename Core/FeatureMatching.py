@@ -40,41 +40,38 @@ def match_features(des1, des2, method="ssd", top_n=100, ratio_threshold=0.6):
     ncc_threshold = 1.25 - 0.25 * ratio_threshold
     
     if method == "ssd":
-        dists = cdist(des1, des2, 'sqeuclidean')
-                
-        best_indices = np.argmin(dists, axis=1)
-        sorted_indices = np.argsort(dists, axis=1)
-        second_best_indices = sorted_indices[:, 1]
+        dists = np.sum(des1**2, axis=1)[:, None] + np.sum(des2**2, axis=1) - 2 * des1 @ des2.T
         
-        valid_matches = (dists[np.arange(len(des1)), best_indices] /
-                         dists[np.arange(len(des1)), second_best_indices]) < ratio_threshold
+        # Find two nearest neighbors
+        idx = np.argpartition(dists, 1, axis=1)[:, :2]
+        min_dists = np.take_along_axis(dists, idx, axis=1)
         
-        for i, valid in enumerate(valid_matches):
-            if valid:
-                matches.append((i, best_indices[i]))
-                scores.append(dists[i, best_indices[i]])
+        # Ratio test
+        ratio = min_dists[:, 0] / (min_dists[:, 1] + 1e-10)
+        mask = ratio < ratio_threshold
+        matches = [(i, idx[i,0]) for i in np.where(mask)[0]]
+        
+        # Sort by distance and select top_n
+        if len(matches) > top_n:
+            sorted_idx = np.argsort([dists[i,j] for i,j in matches])[:top_n]
+            matches = [matches[i] for i in sorted_idx]
     
     elif method == "ncc":  # Normalized Cross-Correlation
         des1_norm = des1 / (np.linalg.norm(des1, axis=1, keepdims=True) + 1e-10)
         des2_norm = des2 / (np.linalg.norm(des2, axis=1, keepdims=True) + 1e-10)
+        scores = des1_norm @ des2_norm.T
+        idx = np.argpartition(-scores, 1, axis=1)[:, :2]
+        top_scores = np.take_along_axis(scores, idx, axis=1)
         
-        scores_matrix = np.zeros((len(des1), len(des2)))
+        # Ratio test
+        ratio = top_scores[:, 1] / (top_scores[:, 0] + 1e-10)
+        mask = (top_scores[:, 0] > 0.8) & (ratio < ncc_threshold) 
+        matches = [(i, idx[i,0]) for i in np.where(mask)[0]]
         
-        for i in range(len(des1)):
-            for j in range(len(des2)):
-                scores_matrix[i, j] = np.dot(des1_norm[i], des2_norm[j])
-        
-        best_indices = np.argmax(scores_matrix, axis=1)
-        sorted_scores = np.sort(scores_matrix, axis=1)
-        second_best_scores = sorted_scores[:, -2]
-        best_scores = scores_matrix[np.arange(len(des1)), best_indices]
-        
-        valid_matches = (best_scores > ratio_threshold) & ((second_best_scores < 0) | (best_scores / second_best_scores > ncc_threshold))
-        
-        for i, valid in enumerate(valid_matches):
-            if valid:
-                matches.append((i, best_indices[i]))
-                scores.append(best_scores[i])
+        # Sort by score and select top_n
+        if len(matches) > top_n:
+            sorted_idx = np.argsort([-scores[i,j] for i,j in matches])[:top_n]
+            matches = [matches[i] for i in sorted_idx]
     
     if len(matches) > top_n:
         sorted_indices = np.argsort(scores)[:top_n] if method == "ssd" else np.argsort(scores)[::-1][:top_n]
@@ -141,8 +138,8 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
 
 
 if __name__ == "__main__":
-    img1 = cv2.imread("CV/Feature-Matching/images/colored2.jpg")
-    img2 = cv2.imread("CV/Feature-Matching/images/colored2.jpg")
+    img1 = cv2.imread("images/Feature matching/Notre Dam 1.png")
+    img2 = cv2.imread("images/Feature matching/Notre Dam 2.png")
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     
@@ -154,14 +151,14 @@ if __name__ == "__main__":
 
     print("Performing feature matching using SSD")
     start_time = time.time()
-    matches_ssd = match_features(des1, des2, method="ssd")
+    matches_ssd = match_features(des1, des2, method="ssd",top_n=200, ratio_threshold=0.7)
     ssd_time = time.time() - start_time
     print(f"SSD Matching Time: {ssd_time:.6f} seconds")
     print(f"Number of matches found (SSD): {len(matches_ssd)}")
 
     print("Performing feature matching using NCC")
     start_time = time.time()
-    matches_ncc = match_features(des1, des2, method="ncc")
+    matches_ncc = match_features(des1, des2, method="ncc", top_n=300, ratio_threshold=0.8)
     ncc_time = time.time() - start_time
     print(f"NCC Matching Time: {ncc_time:.6f} seconds")
     print(f"Number of matches found (NCC): {len(matches_ncc)}")
@@ -182,3 +179,10 @@ if __name__ == "__main__":
     cv2.imshow("Feature Matches - NCC", matched_img2)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+#SSD Matching Time: 0.141332 seconds
+#NCC Matching Time: 2.758240 seconds
+
+#SSD Matching Time: 0.054602 seconds
+#NCC Matching Time: 0.038043 seconds
