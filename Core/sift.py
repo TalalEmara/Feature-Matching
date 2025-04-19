@@ -3,7 +3,7 @@ import cv2 as cv
 import numpy as np
 from math import pi, exp, sqrt
 
-def sift(image, num_octaves=4, num_scales=3, contrast_threshold=0.01, edge_threshold=10.0):
+def sift(image, num_octaves=4, num_scales=3, contrast_threshold=0.01, edge_threshold=12.0):
     """Complete SIFT implementation"""
     gaussian_pyramid, dog_pyramid = space_scale_construction(image, num_octaves, num_scales)
     keypoints = find_keypoints(dog_pyramid, contrast_threshold, edge_threshold)

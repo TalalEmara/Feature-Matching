@@ -26,7 +26,7 @@ def sift_detector(image):
     return kp_array, descriptors
 
 
-def match_features(des1, des2, method="ssd", top_n=100, ratio_threshold=0.6):
+def match_features(des1, des2, method="ssd", top_n=80, ratio_threshold=0.6):
     """
     Parameters:
         des1 : numpy array Feature descriptors from the first image of shape (N1, 128)
@@ -141,8 +141,8 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
 
 
 if __name__ == "__main__":
-    img1 = cv2.imread("CV/Feature-Matching/images/colored2.jpg")
-    img2 = cv2.imread("CV/Feature-Matching/images/colored2.jpg")
+    img1 = cv2.imread("images/Feature matching/Notre Dam 1.png")
+    img2 = cv2.imread("images/Feature matching/Notre Dam 1.png")
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     
@@ -182,3 +182,7 @@ if __name__ == "__main__":
     cv2.imshow("Feature Matches - NCC", matched_img2)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+#SSD Matching Time: 0.141332 seconds
+#NCC Matching Time: 2.758240 seconds
