@@ -3,6 +3,22 @@ import cv2 as cv
 import numpy as np
 from math import pi, exp, sqrt
 
+def sift(image, num_octaves=4, num_scales=2, contrast_threshold=0.01, edge_threshold=10.0):
+    """Complete SIFT implementation"""
+    gaussian_pyramid, dog_pyramid = space_scale_construction(image, num_octaves, num_scales)
+    keypoints = find_keypoints(dog_pyramid, contrast_threshold, edge_threshold)
+    refined = refine_keypoints(gaussian_pyramid, dog_pyramid, keypoints, contrast_threshold)
+    oriented = assign_orientations(gaussian_pyramid, refined)
+    descriptors = compute_descriptors(gaussian_pyramid, oriented)
+        # Convert custom keypoints to OpenCV format for visualization
+    custom_kp = []
+    for octave, scale, x, y, angle in oriented:
+        # Adjust for octave scaling
+        size = 1.6 * (2 ** octave)
+        kp = cv.KeyPoint(y, x, size, angle)
+        custom_kp.append(kp)
+    return custom_kp, descriptors
+
 def space_scale_construction(image, num_octaves=4, num_scales=3, sigma=1.6):
     """Build Gaussian and Difference of Gaussian pyramids"""
     if len(image.shape) == 3:
@@ -249,15 +265,6 @@ def compute_descriptors(gaussian_pyramid, keypoints):
     
     return np.array(descriptors)
 
-def sift(image, num_octaves=4, num_scales=3, contrast_threshold=0.03, edge_threshold=10.0):
-    """Complete SIFT implementation"""
-    gaussian_pyramid, dog_pyramid = space_scale_construction(image, num_octaves, num_scales)
-    keypoints = find_keypoints(dog_pyramid, contrast_threshold, edge_threshold)
-    refined = refine_keypoints(gaussian_pyramid, dog_pyramid, keypoints, contrast_threshold)
-    oriented = assign_orientations(gaussian_pyramid, refined)
-    descriptors = compute_descriptors(gaussian_pyramid, oriented)
-    
-    return oriented, descriptors
 
 ##### TEST #####
 def test():
@@ -266,13 +273,14 @@ def test():
     if image is None:
         print("Error: Image not found!")
         return
-    
+
     print(f"[DEBUG] Loaded test image with shape {image.shape}")
 
+    # start time calculations
+    start_time = cv.getTickCount()
+    print(f"[DEBUG] Starting SIFT computation...{start_time}")
     # Run custom SIFT implementation
-    keypoints, descriptors = sift(image, num_octaves=4, num_scales=2, 
-                                contrast_threshold=0.01, edge_threshold=10)
-    
+    keypoints, descriptors = sift(image)
     # Convert custom keypoints to OpenCV format for visualization
     custom_kp = []
     for octave, scale, x, y, angle in keypoints:
@@ -280,31 +288,39 @@ def test():
         size = 1.6 * (2 ** octave)
         kp = cv.KeyPoint(y, x, size, angle)
         custom_kp.append(kp)
-    
+    print(f"[DEBUG] keypoints: {keypoints}")
+    end_time = cv.getTickCount()
+    time_taken = (end_time - start_time) / cv.getTickFrequency()
+    print(f"[DEBUG] SIFT computation completed in {time_taken:.4f} seconds")
+    print(f"[DEBUG] Number of keypoints detected: {len(keypoints)}")
+    print(f"[DEBUG] Descriptor shape: {descriptors.shape}")
+
+
     # Draw custom keypoints
     img_custom = image.copy()
-    img_custom = cv.drawKeypoints(image, custom_kp, img_custom, 
-                                flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    
+    img_custom = cv.drawKeypoints(image, custom_kp, img_custom,
+                                  flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
     # Run OpenCV SIFT
     sift_built_in = cv.SIFT_create()
     kp_opencv, desc_opencv = sift_built_in.detectAndCompute(image, None)
-    
+    print(f"[DEBUG] OpenCV keypoints: {kp_opencv}")
+
     # Draw OpenCV keypoints
     img_opencv = image.copy()
     img_opencv = cv.drawKeypoints(image, kp_opencv, img_opencv,
-                                flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    
+                                  flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
     # Print comparison stats
     print("\n=== Comparison Results ===")
     print(f"Custom SIFT keypoints: {len(keypoints)}")
     print(f"OpenCV SIFT keypoints: {len(kp_opencv)}")
-    print(f"Keypoint ratio (custom/OpenCV): {len(keypoints)/len(kp_opencv):.2f}")
-    
+    print(f"Keypoint ratio (custom/OpenCV): {len(keypoints) / len(kp_opencv):.2f}")
+
     if len(keypoints) > 0:
         print(f"Custom descriptor shape: {descriptors.shape}")
     print(f"OpenCV descriptor shape: {desc_opencv.shape}")
-    
+
     # Display results side by side
     comparison = np.hstack((img_custom, img_opencv))
     cv.imshow("SIFT Comparison: Custom (Left) vs OpenCV (Right)", comparison)
@@ -316,4 +332,4 @@ def test():
     cv.imwrite("opencv_sift.jpg", img_opencv)
     cv.imwrite("sift_comparison.jpg", comparison)
 
-test()
+# test()

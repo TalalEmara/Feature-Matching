@@ -6,6 +6,7 @@ from scipy.spatial.distance import cdist
 import sys
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPixmap, QImage
+from sift import sift
 
 
 def sift_detector(image):
@@ -18,9 +19,10 @@ def sift_detector(image):
         - numpy Array of descriptors of shape (N, 128)
     """
      
-    sift = cv2.SIFT_create()
-    keypoints, descriptors = sift.detectAndCompute(image, None)
-    kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
+    # sift = cv2.SIFT_create()
+    # keypoints, descriptors = sift.detectAndCompute(image, None)
+    # kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
+    kp_array, descriptors = sift(image)
     return kp_array, descriptors
 
 
@@ -80,8 +82,6 @@ def match_features(des1, des2, method="ssd", top_n=100, ratio_threshold=0.6):
     
     return matches
 
-
-
 def draw_matches(img1, keypoints1, img2, keypoints2, matches):
     h1, w1 = img1.shape[:2]
     h2, w2 = img2.shape[:2]
@@ -92,9 +92,10 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
     np.random.seed(42)  
     colors = np.random.randint(0, 256, (len(matches), 3)).tolist()
 
+    print(keypoints1)
     for i, (idx1, idx2) in enumerate(matches):
-        pt1 = tuple(map(int, keypoints1[idx1]))
-        pt2 = (int(keypoints2[idx2][0] + w1), int(keypoints2[idx2][1]))
+        pt1 = tuple(map(int, keypoints1[idx1].pt)) #changede
+        pt2 = (int(keypoints2[idx2].pt[0] + w1), int(keypoints2[idx2].pt[1])) # changed
         color = tuple(map(int, colors[i]))  
 
         cv2.line(output_img, pt1, pt2, color, 2) 
@@ -141,8 +142,8 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
 
 
 if __name__ == "__main__":
-    img1 = cv2.imread("images/Feature matching/Notre Dam 1.png")
-    img2 = cv2.imread("images/Feature matching/Notre Dam 1.png")
+    img1 = cv2.imread("CV/Feature-Matching/images/colored2.jpg")
+    img2 = cv2.imread("CV/Feature-Matching/images/colored2.jpg")
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     
