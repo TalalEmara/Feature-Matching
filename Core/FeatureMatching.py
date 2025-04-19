@@ -92,7 +92,6 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
     np.random.seed(42)  
     colors = np.random.randint(0, 256, (len(matches), 3)).tolist()
 
-    print(keypoints1)
     for i, (idx1, idx2) in enumerate(matches):
         pt1 = tuple(map(int, keypoints1[idx1].pt)) #changede
         pt2 = (int(keypoints2[idx2].pt[0] + w1), int(keypoints2[idx2].pt[1])) # changed
