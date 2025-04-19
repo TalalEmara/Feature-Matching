@@ -3,14 +3,15 @@ import cv2 as cv
 import numpy as np
 from math import pi, exp, sqrt
 
-def sift(image, num_octaves=4, num_scales=2, contrast_threshold=0.01, edge_threshold=10.0):
+def sift(image, num_octaves=4, num_scales=3, contrast_threshold=0.01, edge_threshold=10.0):
     """Complete SIFT implementation"""
     gaussian_pyramid, dog_pyramid = space_scale_construction(image, num_octaves, num_scales)
     keypoints = find_keypoints(dog_pyramid, contrast_threshold, edge_threshold)
     refined = refine_keypoints(gaussian_pyramid, dog_pyramid, keypoints, contrast_threshold)
     oriented = assign_orientations(gaussian_pyramid, refined)
     descriptors = compute_descriptors(gaussian_pyramid, oriented)
-        # Convert custom keypoints to OpenCV format for visualization
+    
+    # Convert custom keypoints to OpenCV format for visualization
     custom_kp = []
     for octave, scale, x, y, angle in oriented:
         # Adjust for octave scaling
@@ -99,61 +100,70 @@ def find_keypoints(dog_pyramid, contrast_threshold=0.03, edge_threshold=10.0):
     return keypoints
 
 def refine_keypoints(gaussian_pyramid, dog_pyramid, keypoints, contrast_threshold=0.03, max_iter=5):
-    """Refine keypoint locations and remove unstable points"""
     refined = []
-    
+
     for octave, scale, i, j in keypoints:
-        img = gaussian_pyramid[octave][scale]
+        # Ensure octave and scale are within valid range
+        if octave >= len(dog_pyramid) or scale < 1 or scale >= len(dog_pyramid[octave]) - 1:
+            continue
+
         dog = dog_pyramid[octave][scale]
         h, w = dog.shape
-        
+
+        # Skip keypoints too close to image borders
+        if i <= 1 or j <= 1 or i >= h - 2 or j >= w - 2:
+            continue
+
         for _ in range(max_iter):
-            if i <= 0 or j <= 0 or i >= h-1 or j >= w-1:
+            # Re-check bounds in case offset pushes out of bounds
+            if i <= 1 or j <= 1 or i >= h - 2 or j >= w - 2 or scale < 1 or scale >= len(dog_pyramid[octave]) - 1:
                 break
-                
+
             # Compute gradient and Hessian
             dx = (dog[i+1,j] - dog[i-1,j])/2.0
             dy = (dog[i,j+1] - dog[i,j-1])/2.0
             ds = (dog_pyramid[octave][scale+1][i,j] - dog_pyramid[octave][scale-1][i,j])/2.0
             grad = np.array([dx, dy, ds])
-            
+
             dxx = dog[i+1,j] + dog[i-1,j] - 2*dog[i,j]
             dyy = dog[i,j+1] + dog[i,j-1] - 2*dog[i,j]
             dss = dog_pyramid[octave][scale+1][i,j] + dog_pyramid[octave][scale-1][i,j] - 2*dog[i,j]
             dxy = (dog[i+1,j+1] - dog[i+1,j-1] - dog[i-1,j+1] + dog[i-1,j-1])/4.0
-            dxs = (dog_pyramid[octave][scale+1][i+1,j] - dog_pyramid[octave][scale+1][i-1,j] - 
+            dxs = (dog_pyramid[octave][scale+1][i+1,j] - dog_pyramid[octave][scale+1][i-1,j] -
                    dog_pyramid[octave][scale-1][i+1,j] + dog_pyramid[octave][scale-1][i-1,j])/4.0
-            dys = (dog_pyramid[octave][scale+1][i,j+1] - dog_pyramid[octave][scale+1][i,j-1] - 
+            dys = (dog_pyramid[octave][scale+1][i,j+1] - dog_pyramid[octave][scale+1][i,j-1] -
                    dog_pyramid[octave][scale-1][i,j+1] + dog_pyramid[octave][scale-1][i,j-1])/4.0
-            
+
             H = np.array([[dxx, dxy, dxs], [dxy, dyy, dys], [dxs, dys, dss]])
-            
+
             try:
                 offset = -np.linalg.solve(H, grad)
             except np.linalg.LinAlgError:
                 break
-                
+
             if np.abs(offset).max() < 0.5:
                 break
-                
+
             i += int(round(offset[0]))
             j += int(round(offset[1]))
             scale += int(round(offset[2]))
-            
-            if scale < 1 or scale >= len(dog_pyramid[octave])-1:
-                break
-        
-        else:  # No break occurred
+
+        else:
+            continue  # max_iter was reached, discard point
+
+        # Final bounds check
+        if i <= 1 or j <= 1 or i >= h - 2 or j >= w - 2 or scale < 1 or scale >= len(dog_pyramid[octave]) - 1:
             continue
-            
-        # Final contrast check
+
+        dog = dog_pyramid[octave][scale]
         contrast = dog[i,j] + 0.5 * np.dot(grad, offset)
         if abs(contrast) < contrast_threshold:
             continue
-            
+
         refined.append((octave, scale, i, j))
-    
+
     return refined
+
 
 def assign_orientations(gaussian_pyramid, keypoints, num_bins=36):
     """Assign dominant orientations to keypoints"""
@@ -281,14 +291,7 @@ def test():
     print(f"[DEBUG] Starting SIFT computation...{start_time}")
     # Run custom SIFT implementation
     keypoints, descriptors = sift(image)
-    # Convert custom keypoints to OpenCV format for visualization
-    custom_kp = []
-    for octave, scale, x, y, angle in keypoints:
-        # Adjust for octave scaling
-        size = 1.6 * (2 ** octave)
-        kp = cv.KeyPoint(y, x, size, angle)
-        custom_kp.append(kp)
-    print(f"[DEBUG] keypoints: {keypoints}")
+    # print(f"[DEBUG] keypoints: {keypoints}")
     end_time = cv.getTickCount()
     time_taken = (end_time - start_time) / cv.getTickFrequency()
     print(f"[DEBUG] SIFT computation completed in {time_taken:.4f} seconds")
@@ -298,13 +301,13 @@ def test():
 
     # Draw custom keypoints
     img_custom = image.copy()
-    img_custom = cv.drawKeypoints(image, custom_kp, img_custom,
+    img_custom = cv.drawKeypoints(image, keypoints, img_custom,
                                   flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
     # Run OpenCV SIFT
     sift_built_in = cv.SIFT_create()
     kp_opencv, desc_opencv = sift_built_in.detectAndCompute(image, None)
-    print(f"[DEBUG] OpenCV keypoints: {kp_opencv}")
+    # print(f"[DEBUG] OpenCV keypoints: {kp_opencv}")
 
     # Draw OpenCV keypoints
     img_opencv = image.copy()
