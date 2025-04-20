@@ -19,13 +19,13 @@ def sift_detector(image):
         - numpy Array of descriptors of shape (N, 128)
     """
      
-    sift = cv2.SIFT_create()
-    keypoints, descriptors = sift.detectAndCompute(image, None)
-    kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
-    # start_time = time.time()
-    # kp_array, descriptors = sift(image)
-    # sift_time = time.time() - start_time
-    # print(f"SIFT Time: {sift_time:.6f} seconds")
+    # sift = cv2.SIFT_create()
+    # keypoints, descriptors = sift.detectAndCompute(image, None)
+    # kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
+    start_time = time.time()
+    kp_array, descriptors = sift(image)
+    sift_time = time.time() - start_time
+    print(f"SIFT Time: {sift_time:.6f} seconds")
     return kp_array, descriptors
 
 
@@ -96,8 +96,8 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
     colors = np.random.randint(0, 256, (len(matches), 3)).tolist()
 
     for i, (idx1, idx2) in enumerate(matches):
-        pt1 = tuple(map(int, keypoints1[idx1])) #changede
-        pt2 = (int(keypoints2[idx2][0] + w1), int(keypoints2[idx2][1])) # changed
+        pt1 = tuple(map(int, keypoints1[idx1].pt)) #changede
+        pt2 = (int(keypoints2[idx2].pt[0] + w1), int(keypoints2[idx2].pt[1])) # changed
         color = tuple(map(int, colors[i]))  
 
         cv2.line(output_img, pt1, pt2, color, 2) 
