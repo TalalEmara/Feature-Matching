@@ -1,18 +1,20 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, \
+    QComboBox, QSpinBox
 from fontTools.ttx import process
 
+from Core.HarrisFeatures import extractHarrisFeatures
 from Core.canny import canny
 from Core.imageMode import rgb_to_grayscale
 from Core.snake import snake_active_contour
 from GUI.ImageViewer import ImageViewer
 
 
-class Outlier(QMainWindow):
+class FetchFeature(QMainWindow):
     def __init__(self):
         super().__init__()  # Initialize QMainWindow
-        self.setWindowTitle("Outlier Detection")
-        self.resize(1200, 800)
+        self.setWindowTitle("Fetch Feature")
+        self.resize(1600, 700)
 
         self.initializeUI()
         self.setupLayout()
@@ -22,18 +24,28 @@ class Outlier(QMainWindow):
     def initializeUI(self):
 
         self.processingImage = None
-        self.currentMode = "Snake"
-        self.logo = QLabel("Outliner")
+        self.logo = QLabel("Fetch Feature")
 
-        def createModePanel():
-            self.houghButton = QPushButton("Hough Transform")
-            self.snakeButton = QPushButton("Snake (Active Contour)")
+        self.modeComboBoxLabel = QLabel("Mode")
+        self.modeComboBox = QComboBox(self)
+        self.modeComboBox.addItem("Harris")
+        self.modeComboBox.addItem("- lambda")
 
-        createModePanel()
+        self.windowSizeLabel =QLabel("Window Size")
+        self.windowSize = QSpinBox(self)
+        self.windowSize.setValue(7)
+        self.distanceThreshLabel =QLabel("Distance Threshold")
+        self.distanceThresh = QSpinBox(self)
+        self.distanceThresh.setValue(50)
+
+        self.matchingComboBoxLabel = QLabel("Matching Method")
+        self.matchingComboBox = QComboBox(self)
+        self.matchingComboBox.addItem("SSD")
+        self.matchingComboBox.addItem("NCC")
+
 
         self.inputViewer = ImageViewer("Input Image")
-        self.outputViewer = ImageViewer("Output Image")
-        self.outputViewer.setReadOnly(True)
+        self.inputViewer2 = ImageViewer("Input Image")
         self.secondOutputViewer = ImageViewer("Output Image")
         self.secondOutputViewer.setReadOnly(True)
 
@@ -50,28 +62,36 @@ class Outlier(QMainWindow):
         workspace = QVBoxLayout()
         imagesLayout = QHBoxLayout()
         imagesLayoutV = QVBoxLayout()
-        self.parametersLayout = QHBoxLayout()
-
-        self.parametersLayout.addStretch()
-        self.parametersLayout.addWidget(self.processButton)
+        # self.parametersLayout = QHBoxLayout()
+        #
+        # self.parametersLayout.addStretch()
+        # self.parametersLayout.addWidget(self.processButton)
 
         # Add widgets to layout
         modesLayout.addWidget(self.logo, alignment=Qt.AlignCenter)
-        modesLayout.addWidget(self.houghButton)
-        modesLayout.addWidget(self.snakeButton)
+        modesLayout.addWidget(self.modeComboBoxLabel)
+        modesLayout.addWidget(self.modeComboBox)
+        modesLayout.addWidget(self.windowSizeLabel)
+        modesLayout.addWidget(self.windowSize)
+        modesLayout.addWidget(self.distanceThreshLabel)
+        modesLayout.addWidget(self.distanceThresh)
+        modesLayout.addWidget(self.matchingComboBoxLabel)
+        modesLayout.addWidget(self.matchingComboBox)
         modesLayout.addStretch()
+        modesLayout.addWidget(self.processButton)
 
-        imagesLayoutV.addWidget(self.outputViewer,1)
-        imagesLayoutV.addWidget(self.secondOutputViewer,1)
+        # imagesLayoutV.addWidget(self.inputViewer2,1)
+        # imagesLayoutV.addWidget(self.secondOutputViewer,1)
 
         imagesLayout.addWidget(self.inputViewer,1)
-        imagesLayout.addLayout(imagesLayoutV,1)
+        imagesLayout.addWidget(self.inputViewer2,1)
+        imagesLayout.addWidget(self.secondOutputViewer,1)
         # Nest layouts
-        mainLayout.addLayout(modesLayout,20)
-        mainLayout.addLayout(workspace,80)
+        mainLayout.addLayout(modesLayout,10)
+        mainLayout.addLayout(workspace,90)
 
         workspace.addLayout(imagesLayout)
-        workspace.addLayout(self.parametersLayout)
+        # workspace.addLayout(self.parametersLayout)
 
         mainWidget.setLayout(mainLayout)
 
@@ -98,29 +118,18 @@ class Outlier(QMainWindow):
               }
           """
 
-        self.houghButton.setStyleSheet(button_style)
-        self.snakeButton.setStyleSheet(button_style)
 
     def connectUI(self):
         self.processButton.clicked.connect(self.processImage)
-        self.inputViewer.selectionMade.connect(self.setSnakePoints)
-
-    def setSnakePoints(self, selection):
-        self.snakeStart, self.snakeEnd = selection
 
     def  processImage(self):
-        self.processingImage = self.inputViewer.image.copy()
-        if self.currentMode == "Hough":
-            self.processingImage = canny(rgb_to_grayscale(self.processingImage))
-            self.secondOutputViewer.displayImage(self.processingImage)
-            self.secondOutputViewer.groupBox.setTitle("Canny Edges")
-        elif self.currentMode == "Snake" :
-            self.secondOutputViewer.displayImage(canny(rgb_to_grayscale(self.processingImage),30,100))
-            self.processingImage, self.initialContour, self.finalContour = snake_active_contour(self.processingImage, self.snakeStart,self.snakeEnd)
-            self.outputViewer.displayImage(self.processingImage)
-            # self.secondOutputViewer.draw_on_image(self.initialContour,Qt.red, thickness=2)
-            self.outputViewer.draw_on_image(self.finalContour)
-            self.outputViewer.groupBox.setTitle("Snake Edges")
+        self.firstprocessingImage = self.inputViewer.image.copy()
+        self.secondProcessingImage = self.inputViewer2.image.copy()
+        if self.modeComboBox.currentIndex() == 0:
+            firstCorners,_,_,firstCornersMa0k = extractHarrisFeatures(self.firstprocessingImage,window_size=self.windowSize.value(), dist_threshold=self.distanceThreshold.value())
+            secondCorners,_,_,secondCornersMark = extractHarrisFeatures(self.secondProcessingImage,window_size=self.windowSize.value(), dist_threshold=self.distanceThreshold.value())
+        elif self.modeComboBox.currentIndex() == 1:
+            pass
 
 
 

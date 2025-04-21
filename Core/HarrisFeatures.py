@@ -6,7 +6,7 @@ from Core.imageMode import rgb_to_grayscale
 from Core.kernelConvolution import sobel, gaussian_filter
 
 
-def extractHarrisFeatures(img, k=0.04, window_size=7, threshold=0.005):
+def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
     image = img.copy()
     gray = rgb_to_grayscale(image).astype(np.float32)
 
@@ -88,7 +88,7 @@ def extractHarrisFeatures(img, k=0.04, window_size=7, threshold=0.005):
 
     # Apply non-max suppression AFTER thresholding
 
-    corners = distance_based_nms_fast(corners, R, 50)
+    corners = distance_based_nms_fast(corners, R, dist_threshold)
     corners = non_max_suppression(corners, 10)
 
 
@@ -140,7 +140,7 @@ def non_max_suppression(subject, window_size=3):
 
     return suppressed
 
-def distance_based_nms_fast(corners, response_map, dist_thresh=2000):
+def distance_based_nms_fast(corners, response_map, dist_thresh=60):
         y, x = np.where(corners > 0)
         if len(x) == 0:
             return np.zeros_like(corners)
