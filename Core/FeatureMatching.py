@@ -6,7 +6,7 @@ from scipy.spatial.distance import cdist
 import sys
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPixmap, QImage
-from optSift import sift
+from pysift import computeKeypointsAndDescriptors
 
 
 def sift_detector(image):
@@ -23,7 +23,7 @@ def sift_detector(image):
     # keypoints, descriptors = sift.detectAndCompute(image, None)
     # kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
     start_time = time.time()
-    kp_array, descriptors = sift(image)
+    kp_array, descriptors = computeKeypointsAndDescriptors(image)
     sift_time = time.time() - start_time
     print(f"SIFT Time: {sift_time:.6f} seconds")
     return kp_array, descriptors
