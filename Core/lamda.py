@@ -2,7 +2,48 @@ import numpy as np
 import cv2
 import time
 import matplotlib.pyplot as plt
-from scipy.ndimage import gaussian_filter
+
+
+def gaussian_kernel(size, sigma):
+    """Create a 2D Gaussian kernel."""
+    ax = np.linspace(-(size // 2), size // 2, size)
+    xx, yy = np.meshgrid(ax, ax)
+    kernel = np.exp(-(xx**2 + yy**2) / (2 * sigma**2))
+    return kernel / np.sum(kernel)
+
+
+# def convolve2d(image, kernel):
+#     k_h, k_w = kernel.shape
+#     pad_h, pad_w = k_h // 2, k_w // 2
+#     padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
+#     output = np.zeros_like(image, dtype=float)
+#
+#     for i in range(image.shape[0]):
+#         for j in range(image.shape[1]):
+#             region = padded[i:i + k_h, j:j + k_w]
+#             output[i, j] = np.sum(region * kernel)
+#     return output
+
+def convolve2d_fast(image, kernel):
+    """Fast convolution using im2col strategy."""
+    k_h, k_w = kernel.shape
+    pad_h, pad_w = k_h // 2, k_w // 2
+    padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
+
+    H, W = image.shape
+    output = np.zeros((H, W), dtype=float)
+
+    for i in range(k_h):
+        for j in range(k_w):
+            output += kernel[i, j] * padded[i:i + H, j:j + W]
+
+    return output
+
+
+
+def gaussian_smooth(image, kernel_size=5, sigma=1.0):
+    kernel = gaussian_kernel(kernel_size, sigma)
+    return convolve2d_fast(image, kernel)
 
 
 def compute_gradients(image):
@@ -13,22 +54,9 @@ def compute_gradients(image):
                    [0, 0, 0],
                    [-1, -2, -1]], dtype=float)
 
-    Ix = convolve2d(image, Kx)
-    Iy = convolve2d(image, Ky)
+    Ix = convolve2d_fast(image, Kx)
+    Iy = convolve2d_fast(image, Ky)
     return Ix, Iy
-
-
-def convolve2d(image, kernel):
-    k_h, k_w = kernel.shape
-    pad_h, pad_w = k_h // 2, k_w // 2
-    padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
-    output = np.zeros_like(image, dtype=float)
-
-    for i in range(image.shape[0]):
-        for j in range(image.shape[1]):
-            region = padded[i:i + k_h, j:j + k_w]
-            output[i, j] = np.sum(region * kernel)
-    return output
 
 
 def non_maximum_suppression(λ_map, threshold, window_size=5):
@@ -46,7 +74,13 @@ def non_maximum_suppression(λ_map, threshold, window_size=5):
     return keypoints
 
 
-def lambda_detector(image, threshold=1e6):
+def min_eigenvalue_2x2(A, B, C):
+    trace = A + C
+    det_sqrt = np.sqrt(((A - C) / 2) ** 2 + B ** 2)
+    return (trace / 2) - det_sqrt
+
+
+def lambda_detector(image, threshold_ratio=0.01, kernel_size=5, sigma=1.0):
     start_time = time.time()
 
     if len(image.shape) == 3:
@@ -54,56 +88,75 @@ def lambda_detector(image, threshold=1e6):
     else:
         gray = image.astype(float)
 
-    # Step 1: Gradients
-    gray_blurred = gaussian_filter(gray, sigma=1)
-    # Ix, Iy = compute_gradients(gray_blurred)
+    gray = gray.astype(float)
+    gray_blurred = gaussian_smooth(gray, kernel_size, sigma)
+    Ix, Iy = compute_gradients(gray_blurred)
 
-    Ix, Iy = compute_gradients(gray.astype(float))
+    Ixx = gaussian_smooth(Ix ** 2, kernel_size, sigma)
+    Iyy = gaussian_smooth(Iy ** 2, kernel_size, sigma)
+    Ixy = gaussian_smooth(Ix * Iy, kernel_size, sigma)
 
-    # Step 2: Structure tensor elements
-    Ixx = gaussian_filter(Ix ** 2, sigma=1)
-    Iyy = gaussian_filter(Iy ** 2, sigma=1)
-    Ixy = gaussian_filter(Ix * Iy, sigma=1)
-
-    # Step 3: Compute min eigenvalue λ_min
     height, width = gray.shape
     lambda_min = np.zeros_like(gray, dtype=float)
 
     for y in range(height):
         for x in range(width):
-            M = np.array([[Ixx[y, x], Ixy[y, x]],
-                          [Ixy[y, x], Iyy[y, x]]])
-            eigenvalues = np.linalg.eigvalsh(M)
-            lambda_min[y, x] = min(eigenvalues)
+            # M = np.array([[Ixx[y, x], Ixy[y, x]],
+            #               [Ixy[y, x], Iyy[y, x]]])
+            # eigenvalues = np.linalg.eigvalsh(M)
+            # lambda_min[y, x] = min(eigenvalues)
+            A = Ixx[y, x]
+            B = Ixy[y, x]
+            C = Iyy[y, x]
+            lambda_min[y, x] = min_eigenvalue_2x2(A, B, C)
 
-    # Apply Non-Maximum Suppression
+    max_val = np.max(lambda_min)
+    threshold = threshold_ratio * max_val
     keypoints = non_maximum_suppression(lambda_min, threshold)
 
     end_time = time.time()
-    print(f"Computation Time: {end_time - start_time:.4f} seconds")
-    print(f"Total Keypoints Detected after NMS: {len(keypoints)}")
-
+    print(f"[λ Scratch] Time: {end_time - start_time:.4f}s | Keypoints: {len(keypoints)}")
     return keypoints, lambda_min
 
 
-def visualize_keypoints(image, keypoints):
-    if keypoints:
-        plt.imshow(image, cmap='gray')
-        xs, ys = zip(*keypoints)
-        plt.scatter(xs, ys, c='r', s=5)
-        plt.title("λ-based Keypoints after NMS")
-        plt.axis('off')
-        plt.show()
-    else:
-        print("No keypoints to display.")
+def opencv_lambda_detector(image, threshold_ratio=0.01, block_size=3, ksize=3):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+
+    lambda_min = cv2.cornerMinEigenVal(gray, blockSize=block_size, ksize=ksize)
+    max_val = np.max(lambda_min)
+    threshold = threshold_ratio * max_val
+
+    keypoints = non_maximum_suppression(lambda_min, threshold)
+    print(f"[λ OpenCV] Keypoints: {len(keypoints)}")
+    return keypoints, lambda_min
 
 
-# Example usage
+def visualize_keypoints_comparison(image, keypoints1, keypoints2, title1='Scratch λ', title2='OpenCV λ'):
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    for ax, keypoints, title in zip(axes, [keypoints1, keypoints2], [title1, title2]):
+        ax.imshow(image, cmap='gray')
+        if keypoints:
+            xs, ys = zip(*keypoints)
+            ax.scatter(xs, ys, c='red', s=5)
+        ax.set_title(title)
+        ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+
+# Main
 if __name__ == "__main__":
-    image = cv2.imread("../images/chessboard.jpg")  # Read the image
+    image = cv2.imread("../images/Feature matching/Notre Dam 1.png")  # Change this to your image path
 
     if image is None:
-        print("Error: Image not found or cannot be read. Please check the file path.")
+        print("Image not found.")
     else:
-        keypoints, λ_map = lambda_detector(image, threshold=2e4)
-        visualize_keypoints(image, keypoints)
+        # Adjustable parameters
+        kernel_size = 5   # Must be odd
+        sigma = 1.0
+        threshold_ratio = 0.01
+
+        keypoints_lambda, _ = lambda_detector(image, threshold_ratio=threshold_ratio,
+                                              kernel_size=kernel_size, sigma=sigma)
+        keypoints_opencv, _ = opencv_lambda_detector(image, threshold_ratio=threshold_ratio)
+        visualize_keypoints_comparison(image, keypoints_lambda, keypoints_opencv)
