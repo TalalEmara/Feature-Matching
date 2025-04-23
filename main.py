@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVB
     QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox
 
 from Core.HarrisFeatures import extractHarrisFeatures
+from Core.lamda import lambda_detector
 from GUI.styles import GroupBoxStyle, button_style, second_button_style, label_style
 from Core.canny import canny
 from Core.imageMode import rgb_to_grayscale
@@ -67,24 +68,73 @@ class Outlier(QMainWindow):
         self.windowSize.setValue(7)
         self.windowSize.setRange(1,1200)
 
+        # inside createCornerDetectParameters()
 
-        self.distanceThresholdLabel = QLabel("Distance Threshold")
-        self.distanceThresholdLabel.setAlignment(Qt.AlignCenter)
-        self.distanceThreshold = QSpinBox()
-        self.distanceThreshold.setValue(50)
-        self.distanceThreshold.setRange(1,1200)
+        # … after windowSize setup …
 
+        # Harris-style (integer) distance threshold
+        self.distThreshLabel_int = QLabel("Distance Threshold")
+        self.distThreshLabel_int.setAlignment(Qt.AlignCenter)
+        self.distThresh_int = QSpinBox()
+        self.distThresh_int.setRange(1, 1200)
+        self.distThresh_int.setValue(50)
 
+        # Lambda-style (float %) threshold
+        self.threshLabel_float = QLabel("Threshold (%)")
+        self.threshLabel_float.setAlignment(Qt.AlignCenter)
+        self.thresh_float = QDoubleSpinBox()
+        self.thresh_float.setRange(0.1, 10.0)
+        self.thresh_float.setSingleStep(0.1)
+        self.thresh_float.setValue(0.01)
+        self.thresh_float.setSuffix(" %")
+        self.thresh_float.hide()
+        self.threshLabel_float.hide()
+
+        # Layout
         layout = QHBoxLayout()
-
         layout.addWidget(self.detectionMethodLabel)
         layout.addWidget(self.detectionMethod)
         layout.addWidget(self.windowSizeLabel)
         layout.addWidget(self.windowSize)
-        layout.addWidget(self.distanceThresholdLabel)
-        layout.addWidget(self.distanceThreshold)
+
+        layout.addWidget(self.distThreshLabel_int)
+        layout.addWidget(self.distThresh_int)
+
+        layout.addWidget(self.threshLabel_float)
+        layout.addWidget(self.thresh_float)
 
         self.parametersGroupBox.setLayout(layout)
+
+        self.detectionMethod.currentIndexChanged.connect(self.updateDetectionParameters)
+        self.updateDetectionParameters()  # Initialize UI correctly
+
+    def updateDetectionParameters(self):
+        method = self.detectionMethod.currentText()
+
+        if method == "Harris operator":
+            # Show integer distance threshold
+            self.distThreshLabel_int.show()
+            self.distThresh_int.show()
+            # Hide float threshold
+            self.threshLabel_float.hide()
+            self.thresh_float.hide()
+
+            # Set ranges back if needed
+            self.distThresh_int.setRange(1, 1200)
+            self.windowSize.setRange(1, 1200)
+
+        elif method == "- lambda method":
+            # Hide integer distance threshold
+            self.distThreshLabel_int.hide()
+            self.distThresh_int.hide()
+            self.thresh_float.setValue(5)
+            # Show float threshold
+            self.threshLabel_float.show()
+            self.thresh_float.show()
+
+            # Adjust window‑size range for lambda
+            self.windowSize.setRange(1, 15)
+            # (thresh_float range already 0.1–10% with suffix)
 
     def createMatchingParameters(self):
         self.parametersGroupBox = QGroupBox("Hough Circles Parameters")
@@ -227,6 +277,10 @@ class Outlier(QMainWindow):
                 # display timing (you could also show this in a QLabel or console)
                 print(f"Harris detection took {elapsed:.1f} ms")
                 self.outputViewer.groupBox.setTitle(f"Harris Detection ({elapsed:.1f} ms)")
+
+            elif self.detectionMethod.currentIndex() == 1:
+                self.processingImage = lambda_detector(self.processingImage,self.thresh_float.value(),self.windowSize.value())
+
 
             self.outputViewer.displayImage(self.processingImage)
 
