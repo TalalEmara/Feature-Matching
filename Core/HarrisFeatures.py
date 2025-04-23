@@ -98,7 +98,7 @@ def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
     # Create image with corners marked
     marked_image = image.copy()
     for (x, y) in corner_coords:
-        cv2.circle(marked_image, (x, y), 2, (0, 0, 255), -1)  # Red circles
+        cv2.circle(marked_image, (x, y), 5, (0, 0, 255), -1)  # Red circles
 
 
     # Create a blue visualization map (R_norm mapped to blue channel)

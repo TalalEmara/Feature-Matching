@@ -4,10 +4,12 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, \
     QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox
 
+from Core.HarrisFeatures import extractHarrisFeatures
 from GUI.styles import GroupBoxStyle, button_style, second_button_style, label_style
 from Core.canny import canny
 from Core.imageMode import rgb_to_grayscale
 from GUI.ImageViewer import ImageViewer
+import time
 
 
 class Outlier(QMainWindow):
@@ -63,12 +65,14 @@ class Outlier(QMainWindow):
         self.windowSizeLabel.setAlignment(Qt.AlignCenter)
         self.windowSize = QSpinBox()
         self.windowSize.setValue(7)
+        self.windowSize.setRange(1,1200)
 
 
         self.distanceThresholdLabel = QLabel("Distance Threshold")
         self.distanceThresholdLabel.setAlignment(Qt.AlignCenter)
         self.distanceThreshold = QSpinBox()
         self.distanceThreshold.setValue(50)
+        self.distanceThreshold.setRange(1,1200)
 
 
         layout = QHBoxLayout()
@@ -81,7 +85,8 @@ class Outlier(QMainWindow):
         layout.addWidget(self.distanceThreshold)
 
         self.parametersGroupBox.setLayout(layout)
-    def createHoughCirclesParameters(self):
+
+    def createMatchingParameters(self):
         self.parametersGroupBox = QGroupBox("Hough Circles Parameters")
         self.parametersGroupBox.setStyleSheet(GroupBoxStyle)
 
@@ -114,58 +119,6 @@ class Outlier(QMainWindow):
 
         self.parametersGroupBox.setLayout(layout)
 
-
-    def createHoughEllipseParameters(self):
-        self.parametersGroupBox = QGroupBox("Hough Ellipse Parameters")
-        self.parametersGroupBox.setStyleSheet(GroupBoxStyle)
-
-        self.thresholdLabel = QLabel("Threshold:")
-        self.thresholdLabel.setAlignment(Qt.AlignCenter)
-        self.threshold = QSpinBox()
-        self.threshold.setRange(0, 1000)
-        self.threshold.setValue(150)
-
-
-        layout = QHBoxLayout()
-
-        layout.addWidget(self.thresholdLabel)
-        layout.addWidget(self.threshold)
-
-        self.parametersGroupBox.setLayout(layout)
-
-
-    def createCannyParameters(self):
-        self.parametersGroupBox = QGroupBox("Canny Parameters")
-        self.parametersGroupBox.setStyleSheet(GroupBoxStyle)
-
-        # Create QLabel and QSpinBox for Low Threshold
-        self.lowThresholdLabel = QLabel("Low Threshold:")
-        self.lowThresholdLabel.setAlignment(Qt.AlignCenter)
-        self.lowThreshold = QSpinBox()
-        self.lowThreshold.setRange(0, 255)
-        self.lowThreshold.setValue(100)
-
-        # Create QLabel and QSpinBox for High Threshold
-        self.highThresholdLabel = QLabel("High Threshold:")
-        self.highThresholdLabel.setAlignment(Qt.AlignCenter)
-        self.highThreshold = QSpinBox()
-        self.highThreshold.setRange(0, 255)
-        self.highThreshold.setValue(150)
-
-        layout = QHBoxLayout()
-
-        lowLayout = QHBoxLayout()
-        lowLayout.addWidget(self.lowThresholdLabel)
-        lowLayout.addWidget(self.lowThreshold)
-
-        highLayout = QHBoxLayout()
-        highLayout.addWidget(self.highThresholdLabel)
-        highLayout.addWidget(self.highThreshold)
-
-        layout.addLayout(lowLayout)
-        layout.addLayout(highLayout)
-
-        self.parametersGroupBox.setLayout(layout)
 
 
 
@@ -222,27 +175,13 @@ class Outlier(QMainWindow):
             self.secondOutputViewer.hide()
             # self.chainCodeLabel.show()
 
-        elif mode == "Hough Lines":
+        elif mode == "Feature Matching":
             self.createHoughLinesParameters()
             self.chainCodeLabel.hide()
             self.perimeterLabel.hide()
             self.areaLabel.hide()
             self.secondOutputViewer.show()
-        elif mode == "Hough Circles":
-            self.createHoughCirclesParameters()
-            self.chainCodeLabel.hide()
-            self.perimeterLabel.hide()
-            self.areaLabel.hide()
-            self.secondOutputViewer.show()
-        elif mode == "Hough Ellipse":
-            self.createHoughEllipseParameters()
-            self.chainCodeLabel.hide()
-            self.perimeterLabel.hide()
-            self.areaLabel.hide()
-            self.secondOutputViewer.show()
-        else:
-            self.createCannyParameters()
-            self.secondOutputViewer.show()
+
 
 
         # Add new parameters group box to layout
@@ -265,17 +204,31 @@ class Outlier(QMainWindow):
 
     def connectUI(self):
         self.processButton.clicked.connect(self.processImage)
-        self.inputViewer.selectionMade.connect(self.setSnakePoints)
+        # self.inputViewer.selectionMade.connect(self.setSnakePoints)
 
-    def setSnakePoints(self, selection):
-        self.snakeStart, self.snakeEnd = selection
-
-    def  processImage(self):
+    def processImage(self):
         self.processingImage = self.inputViewer.image.copy()
-        if self.currentMode == "Canny":
-            self.processingImage = canny(rgb_to_grayscale(self.processingImage), self.lowThreshold.value(), self.highThreshold.value())
+        if self.currentMode == "Corner Detection":
+            if self.detectionMethod.currentIndex() == 0:
+                # start timer
+                t0 = time.time()
+
+                # run Harris feature extraction
+                _, _, _, self.processingImage = extractHarrisFeatures(
+                    self.processingImage,
+                    0.04,
+                    self.windowSize.value(),
+                    dist_threshold=self.distanceThreshold.value()
+                )
+
+                # stop timer
+                elapsed = (time.time() - t0) * 1000  # milliseconds
+
+                # display timing (you could also show this in a QLabel or console)
+                print(f"Harris detection took {elapsed:.1f} ms")
+                self.outputViewer.groupBox.setTitle(f"Harris Detection ({elapsed:.1f} ms)")
+
             self.outputViewer.displayImage(self.processingImage)
-            self.outputViewer.groupBox.setTitle("Canny Edges")
 
 
 
