@@ -88,7 +88,12 @@ def match_features(des1, des2, method="ssd", top_n=80, ratio_threshold=0.6):
 def draw_matches(img1, keypoints1, img2, keypoints2, matches):
     h1, w1 = img1.shape[:2]
     h2, w2 = img2.shape[:2]
+    
     output_img = np.zeros((max(h1, h2), w1 + w2, 3), dtype=np.uint8)
+    if len(img1.shape) == 2:
+        img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
+    if len(img2.shape) == 2:
+        img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
     output_img[:h1, :w1] = img1
     output_img[:h2, w1:] = img2
 
@@ -96,11 +101,11 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
     colors = np.random.randint(0, 256, (len(matches), 3)).tolist()
 
     for i, (idx1, idx2) in enumerate(matches):
-        pt1 = tuple(map(int, keypoints1[idx1].pt)) #changede
-        pt2 = (int(keypoints2[idx2].pt[0] + w1), int(keypoints2[idx2].pt[1])) # changed
+        pt1 = tuple(map(int, keypoints1[idx1]))
+        pt2 = (int(keypoints2[idx2][0] + w1), int(keypoints2[idx2][1]))
         color = tuple(map(int, colors[i]))  
 
-        cv2.line(output_img, pt1, pt2, color, 2) 
+        cv2.line(output_img, pt1, pt2, color, 2)
         cv2.circle(output_img, pt1, 4, color, -1)
         cv2.circle(output_img, pt2, 4, color, -1)
 
@@ -144,8 +149,8 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
 
 
 if __name__ == "__main__":
-    img1 = cv2.imread("CV/Feature-Matching/images/Feature matching/Notre Dam 1resized.png")
-    img2 = cv2.imread("CV/Feature-Matching/images/Feature matching/Notre Dam 2resized.png")
+    img1 = cv2.imread("images/Feature matching/Notre Dam 1resized.png")
+    img2 = cv2.imread("images/Feature matching/Notre Dam 2resized.png")
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     
