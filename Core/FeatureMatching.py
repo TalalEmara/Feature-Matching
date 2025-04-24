@@ -88,12 +88,13 @@ def match_features(des1, des2, method="ssd", top_n=80, ratio_threshold=0.6):
 def draw_matches(img1, keypoints1, img2, keypoints2, matches):
     h1, w1 = img1.shape[:2]
     h2, w2 = img2.shape[:2]
-    
     output_img = np.zeros((max(h1, h2), w1 + w2, 3), dtype=np.uint8)
+    
     if len(img1.shape) == 2:
         img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
     if len(img2.shape) == 2:
         img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
+        
     output_img[:h1, :w1] = img1
     output_img[:h2, w1:] = img2
 
@@ -110,6 +111,7 @@ def draw_matches(img1, keypoints1, img2, keypoints2, matches):
         cv2.circle(output_img, pt2, 4, color, -1)
 
     return output_img
+
 
 #IF you want to draw it directly with pyqt not return image
 # def draw_matches(img1, keypoints1, img2, keypoints2, matches):
