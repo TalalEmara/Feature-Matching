@@ -113,10 +113,11 @@ def lambda_detector(image, threshold_ratio=0.01, kernel_size=5, sigma=1.0):
     max_val = np.max(lambda_min)
     threshold = threshold_ratio * max_val
     keypoints = non_maximum_suppression(lambda_min, threshold)
+    output_img = draw_keypoints(image, keypoints)
 
     end_time = time.time()
     print(f"[λ Scratch] Time: {end_time - start_time:.4f}s | Keypoints: {len(keypoints)}")
-    return keypoints, lambda_min
+    return keypoints, lambda_min ,output_img
 
 
 def opencv_lambda_detector(image, threshold_ratio=0.01, block_size=3, ksize=3):
@@ -143,6 +144,13 @@ def visualize_keypoints_comparison(image, keypoints1, keypoints2, title1='Scratc
     plt.tight_layout()
     plt.show()
 
+def draw_keypoints(image, keypoints, color=(0, 0, 255), radius=2, thickness=-1):
+    """Returns a copy of the image with keypoints drawn."""
+    output = image.copy()
+    for x, y in keypoints:
+        cv2.circle(output, (x, y), radius, color, thickness)
+    return output
+
 
 # Main
 if __name__ == "__main__":
@@ -156,7 +164,15 @@ if __name__ == "__main__":
         sigma = 1.0
         threshold_ratio = 0.01
 
-        keypoints_lambda, _ = lambda_detector(image, threshold_ratio=threshold_ratio,
-                                              kernel_size=kernel_size, sigma=sigma)
-        keypoints_opencv, _ = opencv_lambda_detector(image, threshold_ratio=threshold_ratio)
-        visualize_keypoints_comparison(image, keypoints_lambda, keypoints_opencv)
+        # keypoints_lambda, _ = lambda_detector(image, threshold_ratio=threshold_ratio,
+        #                                       kernel_size=kernel_size, sigma=sigma)
+        # keypoints_opencv, _ = opencv_lambda_detector(image, threshold_ratio=threshold_ratio)
+        # visualize_keypoints_comparison(image, keypoints_lambda, keypoints_opencv)
+        keypoints_lambda, _, lambda_output_img = lambda_detector(
+                    image, threshold_ratio=threshold_ratio,
+                    kernel_size=kernel_size, sigma=sigma
+                )
+
+        cv2.imshow("Lambda Scratch Detector", lambda_output_img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
