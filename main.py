@@ -280,9 +280,9 @@ class FetchFeature(QMainWindow):
             kp2, des2 = sift_detector(rgb_to_grayscale(self.secondProcessingImage))
 
             if self.matchingMethod.currentIndex() == 0:
-                matches = match_features(des1, des2, method="ssd")
+                matches = match_features(des1, des2,"ssd",self.topMatches.value(),self.matchingThreshold.value())
             elif self.matchingMethod.currentIndex() == 1:
-                matches = match_features(des1, des2, method="ncc")
+                matches = match_features(des1, des2,"ncc")
 
             self.outputViewer.displayImage(draw_matches(self.processingImage, kp1, self.secondProcessingImage, kp2, matches))
 
