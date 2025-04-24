@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, \
-    QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox
+    QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox, QBoxLayout
 
 from Core.FeatureMatching import sift_detector, match_features, draw_matches
 from Core.HarrisFeatures import extractHarrisFeatures
@@ -66,8 +66,10 @@ class FetchFeature(QMainWindow):
         self.windowSizeLabel.setAlignment(Qt.AlignCenter)
         self.windowSize = QSpinBox()
         self.windowSize.setValue(7)
-        self.windowSize.setRange(1,1200)
-
+        self.windowSize.setSingleStep(2)
+        self.windowSize.valueChanged.connect(
+            lambda v: self.windowSize.setValue(v + 1 if v % 2 == 0 else v)
+        )
         # inside createCornerDetectParameters()
 
         # … after windowSize setup …
@@ -151,14 +153,14 @@ class FetchFeature(QMainWindow):
         self.topMatchesLabel.setAlignment(Qt.AlignCenter)
         self.topMatches = QSpinBox()
         self.topMatches.setRange(10, 300)
-        self.topMatches.setValue(10)
+        self.topMatches.setValue(50)
 
         self.matchingThresholdLabel = QLabel("Max Radius:")
         self.matchingThresholdLabel.setAlignment(Qt.AlignCenter)
         self.matchingThreshold = QDoubleSpinBox()
         self.matchingThreshold.setRange(0, 1)
         self.matchingThreshold.setSingleStep(.1)
-        self.matchingThreshold.setValue(.4)
+        self.matchingThreshold.setValue(.6)
 
         layout = QHBoxLayout()
 
@@ -181,7 +183,7 @@ class FetchFeature(QMainWindow):
         mainLayout = QHBoxLayout()
         modesLayout = QVBoxLayout()
         workspace = QVBoxLayout()
-        imagesLayout = QVBoxLayout()
+        self.imagesLayout = QBoxLayout(QBoxLayout.TopToBottom)
         imagesLayoutH = QHBoxLayout()
         self.parametersLayout = QHBoxLayout()
 
@@ -201,14 +203,15 @@ class FetchFeature(QMainWindow):
         imagesLayoutH.addWidget(self.secondInputViewer, 3)
 
 
-        imagesLayout.addLayout(imagesLayoutH,1)
-        imagesLayout.addWidget(self.outputViewer,1)
+        self.imagesLayout.addLayout(imagesLayoutH,1)
+        self.imagesLayout.addWidget(self.outputViewer,1)
         # Nest layouts
         mainLayout.addLayout(modesLayout,10)
         mainLayout.addLayout(workspace,90)
 
-        workspace.addLayout(imagesLayout)
+        workspace.addLayout(self.imagesLayout)
         workspace.addLayout(self.parametersLayout)
+
 
         mainWidget.setLayout(mainLayout)
 
@@ -225,10 +228,12 @@ class FetchFeature(QMainWindow):
         if mode == "Corner Detection":
             self.createCornerDetectParameters()
             self.secondInputViewer.hide()
+            self.imagesLayout.setDirection(QBoxLayout.LeftToRight)
             # self.chainCodeLabel.show()
 
         elif mode == "Feature Matching":
             self.createMatchingParameters()
+            self.imagesLayout.setDirection(QBoxLayout.TopToBottom)
 
             self.secondInputViewer.show()
 
@@ -282,7 +287,7 @@ class FetchFeature(QMainWindow):
             if self.matchingMethod.currentIndex() == 0:
                 matches = match_features(des1, des2,"ssd",self.topMatches.value(),self.matchingThreshold.value())
             elif self.matchingMethod.currentIndex() == 1:
-                matches = match_features(des1, des2,"ncc")
+                matches = match_features(des1, des2,"ncc",self.topMatches.value(),self.matchingThreshold.value())
 
             self.outputViewer.displayImage(draw_matches(self.processingImage, kp1, self.secondProcessingImage, kp2, matches))
 
