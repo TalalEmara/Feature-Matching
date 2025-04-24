@@ -279,7 +279,7 @@ def compute_descriptors(gaussian_pyramid, keypoints):
 ##### TEST #####
 def test():
     # Load test image
-    image = cv.imread('CV/Feature-Matching/images/Feature matching/Notre Dam 1resized.png')
+    image = cv.imread('CV/Feature-Matching/images/box.png')
     if image is None:
         print("Error: Image not found!")
         return
@@ -335,4 +335,4 @@ def test():
     cv.imwrite("opencv_sift.jpg", img_opencv)
     cv.imwrite("sift_comparison.jpg", comparison)
 
-# test()
+test()

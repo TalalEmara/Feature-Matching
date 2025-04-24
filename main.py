@@ -1,11 +1,16 @@
+import cv2
+import numpy as np
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
-from fontTools.ttx import process
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, \
+    QGroupBox, QSpinBox, QDoubleSpinBox, QComboBox
 
+from Core.HarrisFeatures import extractHarrisFeatures
+from Core.lamda import lambda_detector
+from GUI.styles import GroupBoxStyle, button_style, second_button_style, label_style
 from Core.canny import canny
 from Core.imageMode import rgb_to_grayscale
-from Core.snake import snake_active_contour
 from GUI.ImageViewer import ImageViewer
+import time
 
 
 class Outlier(QMainWindow):
@@ -15,6 +20,7 @@ class Outlier(QMainWindow):
         self.resize(1200, 800)
 
         self.initializeUI()
+        self.createCornerDetectParameters()
         self.setupLayout()
         self.styleUI()
         self.connectUI()
@@ -22,12 +28,17 @@ class Outlier(QMainWindow):
     def initializeUI(self):
 
         self.processingImage = None
-        self.currentMode = "Snake"
-        self.logo = QLabel("Outliner")
+        self.currentMode = "Corner Detection"
+        self.logo = QLabel("Fetch Feature")
 
         def createModePanel():
-            self.houghButton = QPushButton("Hough Transform")
-            self.snakeButton = QPushButton("Snake (Active Contour)")
+            self.cornerButton = QPushButton("Corner Detection")
+            self.matchingButton = QPushButton("Feature Matching")
+
+
+            self.cornerButton.clicked.connect(lambda: self.changeMode("Corner Detection"))
+            self.matchingButton.clicked.connect(lambda: self.changeMode("Feature Matching"))
+
 
         createModePanel()
 
@@ -41,6 +52,126 @@ class Outlier(QMainWindow):
         self.processButton = QPushButton("Process")
 
 
+    def createCornerDetectParameters(self):
+        self.parametersGroupBox = QGroupBox("Corner Detection Parameters")
+        self.parametersGroupBox.setStyleSheet(GroupBoxStyle)
+
+        self.detectionMethodLabel = QLabel("Detection method")
+        self.detectionMethodLabel.setAlignment(Qt.AlignCenter)
+        self.detectionMethod = QComboBox()
+        self.detectionMethod.addItem("Harris operator")
+        self.detectionMethod.addItem("- lambda method")
+
+        self.windowSizeLabel = QLabel("Window size")
+        self.windowSizeLabel.setAlignment(Qt.AlignCenter)
+        self.windowSize = QSpinBox()
+        self.windowSize.setValue(7)
+        self.windowSize.setRange(1,1200)
+
+        # inside createCornerDetectParameters()
+
+        # … after windowSize setup …
+
+        # Harris-style (integer) distance threshold
+        self.distThreshLabel_int = QLabel("Distance Threshold")
+        self.distThreshLabel_int.setAlignment(Qt.AlignCenter)
+        self.distThresh_int = QSpinBox()
+        self.distThresh_int.setRange(1, 1200)
+        self.distThresh_int.setValue(50)
+
+        # Lambda-style (float %) threshold
+        self.threshLabel_float = QLabel("Threshold (%)")
+        self.threshLabel_float.setAlignment(Qt.AlignCenter)
+        self.thresh_float = QDoubleSpinBox()
+        self.thresh_float.setRange(0.1, 10.0)
+        self.thresh_float.setSingleStep(0.1)
+        self.thresh_float.setValue(0.01)
+        self.thresh_float.setSuffix(" %")
+        self.thresh_float.hide()
+        self.threshLabel_float.hide()
+
+        # Layout
+        layout = QHBoxLayout()
+        layout.addWidget(self.detectionMethodLabel)
+        layout.addWidget(self.detectionMethod)
+        layout.addWidget(self.windowSizeLabel)
+        layout.addWidget(self.windowSize)
+
+        layout.addWidget(self.distThreshLabel_int)
+        layout.addWidget(self.distThresh_int)
+
+        layout.addWidget(self.threshLabel_float)
+        layout.addWidget(self.thresh_float)
+
+        self.parametersGroupBox.setLayout(layout)
+
+        self.detectionMethod.currentIndexChanged.connect(self.updateDetectionParameters)
+        self.updateDetectionParameters()  # Initialize UI correctly
+
+    def updateDetectionParameters(self):
+        method = self.detectionMethod.currentText()
+
+        if method == "Harris operator":
+            # Show integer distance threshold
+            self.distThreshLabel_int.show()
+            self.distThresh_int.show()
+            # Hide float threshold
+            self.threshLabel_float.hide()
+            self.thresh_float.hide()
+
+            # Set ranges back if needed
+            self.distThresh_int.setRange(1, 1200)
+            self.windowSize.setRange(1, 1200)
+
+        elif method == "- lambda method":
+            # Hide integer distance threshold
+            self.distThreshLabel_int.hide()
+            self.distThresh_int.hide()
+            self.thresh_float.setValue(5)
+            # Show float threshold
+            self.threshLabel_float.show()
+            self.thresh_float.show()
+
+            # Adjust window‑size range for lambda
+            self.windowSize.setRange(1, 15)
+            # (thresh_float range already 0.1–10% with suffix)
+
+    def createMatchingParameters(self):
+        self.parametersGroupBox = QGroupBox("Hough Circles Parameters")
+        self.parametersGroupBox.setStyleSheet(GroupBoxStyle)
+
+        self.thresholdLabel = QLabel("Threshold:")
+        self.thresholdLabel.setAlignment(Qt.AlignCenter)
+        self.threshold = QSpinBox()
+        self.threshold.setRange(0, 1000)
+        self.threshold.setValue(100)
+
+        self.minradiusLabel = QLabel("Min Radius:")
+        self.minradiusLabel.setAlignment(Qt.AlignCenter)
+        self.minraduis = QSpinBox()
+        self.minraduis.setRange(0, 1000)
+        self.minraduis.setValue(1)
+
+        self.maxradiusLabel = QLabel("Max Radius:")
+        self.maxradiusLabel.setAlignment(Qt.AlignCenter)
+        self.maxraduis = QSpinBox()
+        self.maxraduis.setRange(0, 1000)
+        self.maxraduis.setValue(100)
+
+        layout = QHBoxLayout()
+
+        layout.addWidget(self.thresholdLabel)
+        layout.addWidget(self.threshold)
+        layout.addWidget(self.minradiusLabel)
+        layout.addWidget(self.minraduis)
+        layout.addWidget(self.maxradiusLabel)
+        layout.addWidget(self.maxraduis)
+
+        self.parametersGroupBox.setLayout(layout)
+
+
+
+
     def setupLayout(self):
         mainWidget = QWidget(self)
         self.setCentralWidget(mainWidget)
@@ -52,28 +183,59 @@ class Outlier(QMainWindow):
         imagesLayoutV = QVBoxLayout()
         self.parametersLayout = QHBoxLayout()
 
-        self.parametersLayout.addStretch()
+        self.parametersLayout.addWidget(self.parametersGroupBox)
         self.parametersLayout.addWidget(self.processButton)
 
         # Add widgets to layout
         modesLayout.addWidget(self.logo, alignment=Qt.AlignCenter)
-        modesLayout.addWidget(self.houghButton)
-        modesLayout.addWidget(self.snakeButton)
+        modesLayout.addWidget(self.cornerButton)
+        modesLayout.addWidget(self.matchingButton)
+        # modesLayout.addWidget(self.houghCirclesButton)
+        # modesLayout.addWidget(self.houghEllipseButton)
+        # modesLayout.addWidget(self.snakeButton)
         modesLayout.addStretch()
 
-        imagesLayoutV.addWidget(self.outputViewer,1)
-        imagesLayoutV.addWidget(self.secondOutputViewer,1)
+        imagesLayoutV.addWidget(self.outputViewer,4)
+        imagesLayoutV.addWidget(self.secondOutputViewer,3)
+
 
         imagesLayout.addWidget(self.inputViewer,1)
         imagesLayout.addLayout(imagesLayoutV,1)
         # Nest layouts
-        mainLayout.addLayout(modesLayout,20)
-        mainLayout.addLayout(workspace,80)
+        mainLayout.addLayout(modesLayout,10)
+        mainLayout.addLayout(workspace,90)
 
         workspace.addLayout(imagesLayout)
         workspace.addLayout(self.parametersLayout)
 
         mainWidget.setLayout(mainLayout)
+
+    def changeMode(self, mode):
+        """Change the current mode and update the UI accordingly."""
+        self.currentMode = mode
+
+        # Remove existing parametersGroupBox if it exists
+        if hasattr(self, "parametersGroupBox"):
+            self.parametersLayout.removeWidget(self.parametersGroupBox)
+            self.parametersGroupBox.deleteLater()  # Properly delete the widget
+
+        # Create the corresponding parameter panel
+        if mode == "Corner Detection":
+            self.createCornerDetectParameters()
+            self.secondOutputViewer.hide()
+            # self.chainCodeLabel.show()
+
+        elif mode == "Feature Matching":
+            self.createHoughLinesParameters()
+            self.chainCodeLabel.hide()
+            self.perimeterLabel.hide()
+            self.areaLabel.hide()
+            self.secondOutputViewer.show()
+
+
+
+        # Add new parameters group box to layout
+        self.parametersLayout.insertWidget(0, self.parametersGroupBox)
 
     def styleUI(self):
         self.logo.setStyleSheet("font-family: 'Franklin Gothic';"
@@ -81,46 +243,47 @@ class Outlier(QMainWindow):
                                 " font-weight:600;"
                                 " padding:30px;")
 
-        button_style = """
-              QPushButton {
-                  font-family: 'Franklin Gothic';
-                  font-size: 18px;
-                  color: white;
-                  background-color: #007BFF; /* Blue */
-                  border-radius: 10px;
-                  padding: 10px;
-              }
-              QPushButton:hover {
-                  background-color: #0056b3; /* Darker Blue */
-              }
-              QPushButton:pressed {
-                  background-color: #004494; /* Even Darker Blue */
-              }
-          """
 
-        self.houghButton.setStyleSheet(button_style)
-        self.snakeButton.setStyleSheet(button_style)
+        self.processButton.setFixedWidth(250)
+        self.processButton.setFixedHeight(40)
+        # self.processButton.setStyleSheet(second_button_style)
+        self.cornerButton.setStyleSheet(button_style)
+        self.matchingButton.setStyleSheet(button_style)
+
+
 
     def connectUI(self):
         self.processButton.clicked.connect(self.processImage)
-        self.inputViewer.selectionMade.connect(self.setSnakePoints)
+        # self.inputViewer.selectionMade.connect(self.setSnakePoints)
 
-    def setSnakePoints(self, selection):
-        self.snakeStart, self.snakeEnd = selection
-
-    def  processImage(self):
+    def processImage(self):
         self.processingImage = self.inputViewer.image.copy()
-        if self.currentMode == "Hough":
-            self.processingImage = canny(rgb_to_grayscale(self.processingImage))
-            self.secondOutputViewer.displayImage(self.processingImage)
-            self.secondOutputViewer.groupBox.setTitle("Canny Edges")
-        elif self.currentMode == "Snake" :
-            self.secondOutputViewer.displayImage(canny(rgb_to_grayscale(self.processingImage),30,100))
-            self.processingImage, self.initialContour, self.finalContour = snake_active_contour(self.processingImage, self.snakeStart,self.snakeEnd)
+        if self.currentMode == "Corner Detection":
+            if self.detectionMethod.currentIndex() == 0:
+                # start timer
+                t0 = time.time()
+
+                # run Harris feature extraction
+                _, _, _, self.processingImage = extractHarrisFeatures(
+                    self.processingImage,
+                    0.04,
+                    self.windowSize.value(),
+                    dist_threshold=self.distanceThreshold.value()
+                )
+
+                # stop timer
+                elapsed = (time.time() - t0) * 1000  # milliseconds
+
+                # display timing (you could also show this in a QLabel or console)
+                print(f"Harris detection took {elapsed:.1f} ms")
+                self.outputViewer.groupBox.setTitle(f"Harris Detection ({elapsed:.1f} ms)")
+
+            elif self.detectionMethod.currentIndex() == 1:
+                self.processingImage = lambda_detector(self.processingImage,self.thresh_float.value(),self.windowSize.value())
+
+
             self.outputViewer.displayImage(self.processingImage)
-            # self.secondOutputViewer.draw_on_image(self.initialContour,Qt.red, thickness=2)
-            self.outputViewer.draw_on_image(self.finalContour)
-            self.outputViewer.groupBox.setTitle("Snake Edges")
+
 
 
 
