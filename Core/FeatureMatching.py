@@ -22,9 +22,15 @@ def sift_detector(image):
     # sift = cv2.SIFT_create()
     # keypoints, descriptors = sift.detectAndCompute(image, None)
     # kp_array = np.array([kp.pt for kp in keypoints], dtype=np.float32)
+    
     start_time = time.time()
     kp_array, descriptors = computeKeypointsAndDescriptors(image)
+    if isinstance(kp_array[0], cv2.KeyPoint):
+        kp_array = np.array([kp.pt for kp in kp_array], dtype=np.float32)
+    else:
+        kp_array = np.array(kp_array, dtype=np.float32)
     sift_time = time.time() - start_time
+   
     print(f"SIFT Time: {sift_time:.6f} seconds")
     return kp_array, descriptors
 
