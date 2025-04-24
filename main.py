@@ -13,10 +13,10 @@ from GUI.ImageViewer import ImageViewer
 import time
 
 
-class Outlier(QMainWindow):
+class FetchFeature(QMainWindow):
     def __init__(self):
         super().__init__()  # Initialize QMainWindow
-        self.setWindowTitle("Outlier Detection")
+        self.setWindowTitle("Fetch Features")
         self.resize(1200, 800)
 
         self.initializeUI()
@@ -127,17 +127,18 @@ class Outlier(QMainWindow):
             # Hide integer distance threshold
             self.distThreshLabel_int.hide()
             self.distThresh_int.hide()
-            self.thresh_float.setValue(5)
+            self.thresh_float.setValue(0.01)
             # Show float threshold
             self.threshLabel_float.show()
             self.thresh_float.show()
 
             # Adjust window‑size range for lambda
             self.windowSize.setRange(1, 15)
+            self.windowSize.setValue(5)
             # (thresh_float range already 0.1–10% with suffix)
 
     def createMatchingParameters(self):
-        self.parametersGroupBox = QGroupBox("Hough Circles Parameters")
+        self.parametersGroupBox = QGroupBox("Matching Parameters")
         self.parametersGroupBox.setStyleSheet(GroupBoxStyle)
 
         self.thresholdLabel = QLabel("Threshold:")
@@ -226,10 +227,8 @@ class Outlier(QMainWindow):
             # self.chainCodeLabel.show()
 
         elif mode == "Feature Matching":
-            self.createHoughLinesParameters()
-            self.chainCodeLabel.hide()
-            self.perimeterLabel.hide()
-            self.areaLabel.hide()
+            self.createMatchingParameters()
+
             self.secondOutputViewer.show()
 
 
@@ -268,7 +267,7 @@ class Outlier(QMainWindow):
                     self.processingImage,
                     0.04,
                     self.windowSize.value(),
-                    dist_threshold=self.distanceThreshold.value()
+                    dist_threshold= self.distThresh_int.value()
                 )
 
                 # stop timer
@@ -279,7 +278,8 @@ class Outlier(QMainWindow):
                 self.outputViewer.groupBox.setTitle(f"Harris Detection ({elapsed:.1f} ms)")
 
             elif self.detectionMethod.currentIndex() == 1:
-                self.processingImage = lambda_detector(self.processingImage,self.thresh_float.value(),self.windowSize.value())
+                _,_,self.processingImage = lambda_detector(self.processingImage,self.thresh_float.value(),self.windowSize.value())
+                self.outputViewer.groupBox.setTitle(f"- lambda")
 
 
             self.outputViewer.displayImage(self.processingImage)
@@ -291,6 +291,6 @@ class Outlier(QMainWindow):
 if __name__ == "__main__":
     import sys
     app = QApplication(sys.argv)
-    window = Outlier()
+    window = FetchFeature()
     window.show()
     sys.exit(app.exec_())

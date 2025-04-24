@@ -1,3 +1,4 @@
+import time
 import cv2
 import numpy as np
 
@@ -51,6 +52,7 @@ def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
     R = np.zeros((height, width))
 
     # Sliding window to compute local Harris response
+    t0 = time.time()
     for i in range(height):
         for j in range(width):
             # Extract window for each component
@@ -71,6 +73,7 @@ def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
             R[i, j] = det_H - k * (trace_H ** 2)
 
 
+    # display timing (you could also show this in a QLabel or console)
     # Normalize R
     R_min, R_max = np.min(R), np.max(R)
     if R_max != R_min:
@@ -83,6 +86,8 @@ def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
     threshold_value = np.percentile(R_norm[R_norm > 0], 100) if np.any(R_norm > 0) else 0
     # threshold_value = np.mean(R[R > 0]) + 2 * np.std(R[R > 0])
 
+    elapsed = (time.time() - t0) * 1000  # milliseconds
+    print(f"Harris detection Only took {elapsed:.1f} ms")
     # Apply thresholding first
     corners = (R > threshold_value).astype(np.uint8) * 255
 
