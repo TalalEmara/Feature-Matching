@@ -6,7 +6,7 @@ from scipy.spatial.distance import cdist
 import sys
 from PyQt5.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 from PyQt5.QtGui import QPixmap, QImage
-from pysift import computeKeypointsAndDescriptors
+from Core.pysift import *
 
 
 def sift_detector(image):
