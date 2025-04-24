@@ -6,6 +6,14 @@ from Core.canny import canny
 from Core.imageMode import rgb_to_grayscale
 from Core.kernelConvolution import sobel, gaussian_filter
 
+def window_sum(integral, top, left, ws):
+    # integral shape is (h+1, w+1)
+    b, r = top, left
+    t, l = top + ws, left + ws
+    return (integral[t, l]
+          - integral[b, l]
+          - integral[t, r]
+          + integral[b, r])
 
 def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
     image = img.copy()
@@ -22,6 +30,9 @@ def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
     Iyy = gradienY ** 2
     Ixy = gradienX * gradienY
 
+    int_Ixx = cv2.integral(Ixx)
+    int_Iyy = cv2.integral(Iyy)
+    int_Ixy = cv2.integral(Ixy)
     # Ixx = gaussian_filter(Ixx, 5, .8)
     # Iyy = gaussian_filter(Iyy, 3, .8)
     # Ixy = gaussian_filter(Ixy, 3, 1)
@@ -55,23 +66,22 @@ def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
     t0 = time.time()
     for i in range(height):
         for j in range(width):
-            # Extract window for each component
-            window_Ixx = Ixx[i:i + window_size, j:j + window_size]
-            window_Iyy = Iyy[i:i + window_size, j:j + window_size]
-            window_Ixy = Ixy[i:i + window_size, j:j + window_size]
+            if i + window_size > height or j + window_size > width:
+                continue
 
-            # Sum of values in the window
-            Sxx = np.sum(window_Ixx)
-            Syy = np.sum(window_Iyy)
-            Sxy = np.sum(window_Ixy)
+            Sxx = window_sum(int_Ixx, i, j, window_size)
+            Syy = window_sum(int_Iyy, i, j, window_size)
+            Sxy = window_sum(int_Ixy, i, j, window_size)
 
             # Harris matrix H
             det_H = (Sxx * Syy) - (Sxy ** 2)
             trace_H = Sxx + Syy
 
-            # Harris response R
+            # Harris response
             R[i, j] = det_H - k * (trace_H ** 2)
 
+    elapsed = (time.time() - t0) * 1000  # milliseconds
+    print(f"Harris detection Only took {elapsed:.1f} ms")
 
     # display timing (you could also show this in a QLabel or console)
     # Normalize R
@@ -86,8 +96,6 @@ def extractHarrisFeatures(img, k=0.04, window_size=7, dist_threshold=50):
     threshold_value = np.percentile(R_norm[R_norm > 0], 100) if np.any(R_norm > 0) else 0
     # threshold_value = np.mean(R[R > 0]) + 2 * np.std(R[R > 0])
 
-    elapsed = (time.time() - t0) * 1000  # milliseconds
-    print(f"Harris detection Only took {elapsed:.1f} ms")
     # Apply thresholding first
     corners = (R > threshold_value).astype(np.uint8) * 255
 
