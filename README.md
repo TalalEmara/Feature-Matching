@@ -105,10 +105,10 @@ This tool serves as a foundational platform for tasks in:
 
 ---
 
-## 👨‍💻 Developers
+## Developers
 
-| [Talal Mahmoud Emara](https://github.com/) | [Maya Mohamed](https://github.com/) | [Meram Mahmoud](https://github.com/) | [Nouran Hani](https://github.com/) |
-| :----------------------------------------: | :---------------------------------: | :----------------------------------: | :--------------------------------: |
+| [**Talal Emara**](https://github.com/TalalEmara) | [**Meram Mahmoud**](https://github.com/Meram-Mahmoud) | [**Maya Mohammed**](https://github.com/Mayamohamed207) | [**Nouran Hani**](https://github.com/Nouran-Hani) | [**Nariman Ahmed**](https://github.com/nariman-ahmed) |
+|:------------------------------------------:|:------------------------------------------:|:------------------------------------------:|:------------------------------------------:|:------------------------------------------:|
 ---
 
 ## 📎 Learn More
